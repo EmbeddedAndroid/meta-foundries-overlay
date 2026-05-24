@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# Canonical kas entrypoint for this factory build.
+#
+# Builds lmp-factory-image (declared in this overlay) on top of:
+#   - meta-foundries product layer
+#   - meta-updater (Uptane upstream)
+#   - meta-qcom + meta-qcom-distro + meta-qcom-3rdparty BSP stack
+#
+# All layer pins live in meta-foundries' kas/ci/target-rb3gen2.yml
+# (single source of truth); this file declares only the URLs +
+# branches and adds the overlay itself.
+#
+# Foundries CI consumes this directly via:
+#   kas-container build kas/factory.yml
+
+header:
+  version: 14
+  includes:
+    - repo: meta-foundries
+      file: kas/ci/target-rb3gen2.yml
+
+repos:
+  meta-foundries:
+    url: https://github.com/EmbeddedAndroid/meta-foundries
+    branch: main
+
+  meta-foundries-overlay:
+    path: .
+    layers:
+      .:
+
+  meta-updater:
+    url: https://github.com/EmbeddedAndroid/meta-updater
+    branch: fio-v1
+
+  meta-qcom:
+    url: https://github.com/EmbeddedAndroid/meta-qcom
+    branch: fio-v1
+
+  meta-qcom-distro:
+    url: https://github.com/EmbeddedAndroid/meta-qcom-distro
+    branch: fio-v1
+
+  meta-qcom-3rdparty:
+    url: https://github.com/EmbeddedAndroid/meta-qcom-3rdparty
+    branch: fio-v1
+
+local_conf_header:
+  # create-spdx hits a systemd / p11-kit circular dep and a
+  # glibc-mtrace tar-on-collateral-recipe failure. Mirror the
+  # Foundries CI local.conf setting until oe-core upstream fixes land.
+  spdx-off: |
+    INHERIT:remove = "create-spdx"
+    INHERIT_DISTRO:remove = "create-spdx"
+
+target:
+  - lmp-factory-image

@@ -1,0 +1,38 @@
+notify:
+  email:
+    users: 'tyler@foundries.io,ci-notifications@foundries.io'
+
+# Foundries CI invokes kas-container directly using kas/factory.yml.
+# The lmp.params block below mirrors what factory.yml pins (kept for
+# the CI side until kas-direct consumption is everywhere).
+
+lmp:
+  worker_tag: "amd64-partner-gcp-himem"
+  ci_image: "hub.foundries.io/lmp-sdk:next"
+
+  params:
+    IMAGE: lmp-factory-image
+    DISTRO: qcom-distro-sota
+    DOCKER_COMPOSE_APP: "1"
+
+  machines:
+    - rb3gen2-core-kit
+
+  tagging:
+    refs/heads/main:
+      - tag: main
+    refs/heads/devel:
+      - tag: devel
+
+containers:
+  params:
+    DOCKER_COMPOSE_APP: "1"
+
+  platforms:
+    - arm
+
+  tagging:
+    refs/heads/main:
+      - tag: main
+    refs/heads/devel:
+      - tag: devel
