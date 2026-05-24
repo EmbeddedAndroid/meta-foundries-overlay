@@ -18,9 +18,6 @@ repos:
     branch: main
 
   meta-foundries-overlay:
-    path: .
-    layers:
-      .:
 
   meta-updater:
     url: https://github.com/EmbeddedAndroid/meta-updater
