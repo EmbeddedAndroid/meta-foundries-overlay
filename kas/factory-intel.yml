@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# Intel x86_64 variant of the agentic factory. Builds
+# lmp-factory-image-intel against meta-intel + meta-foundries.
+#
+# Produces a flashable wic image at
+#   tmp/deploy/images/intel-corei7-64/lmp-factory-image-intel-*.wic.gz
+
+header:
+  version: 14
+  includes:
+    - repo: meta-foundries
+      file: kas/ci/target-intel-x86.yml
+
+repos:
+  meta-foundries:
+    url: https://github.com/EmbeddedAndroid/meta-foundries
+    branch: main
+
+  meta-foundries-overlay:
+    path: .
+    layers:
+      .:
+
+  meta-updater:
+    url: https://github.com/EmbeddedAndroid/meta-updater
+    branch: fio-v1
+
+local_conf_header:
+  spdx-off: |
+    INHERIT:remove = "create-spdx"
+    INHERIT_DISTRO:remove = "create-spdx"
+
+target:
+  - lmp-factory-image-intel
