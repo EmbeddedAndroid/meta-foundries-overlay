@@ -39,7 +39,10 @@ repos:
 
   meta-qcom-3rdparty:
     url: https://github.com/EmbeddedAndroid/meta-qcom-3rdparty
-    branch: main
+    # uno-q-next = upstream main + qualcomm-linux/meta-qcom-3rdparty PR #28
+    # (edk2-based boot firmware + linux-qcom-next switch + anx7625 essential).
+    # In-flight; rebase or drop the branch when #28 merges upstream.
+    branch: uno-q-next
 
 local_conf_header:
   spdx-off: |
