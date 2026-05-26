@@ -21,7 +21,7 @@ repos:
 
   meta-updater:
     url: https://github.com/EmbeddedAndroid/meta-updater
-    branch: fio-v1
+    branch: fio-v2
 
 local_conf_header:
   spdx-off: |

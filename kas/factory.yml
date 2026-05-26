@@ -29,19 +29,19 @@ repos:
 
   meta-updater:
     url: https://github.com/EmbeddedAndroid/meta-updater
-    branch: fio-v1
+    branch: fio-v2
 
   meta-qcom:
     url: https://github.com/EmbeddedAndroid/meta-qcom
-    branch: fio-v1
+    branch: fio-v2
 
   meta-qcom-distro:
     url: https://github.com/EmbeddedAndroid/meta-qcom-distro
-    branch: fio-v1
+    branch: fio-v2
 
   meta-qcom-3rdparty:
     url: https://github.com/EmbeddedAndroid/meta-qcom-3rdparty
-    branch: fio-v1
+    branch: main
 
 local_conf_header:
   # create-spdx hits a systemd / p11-kit circular dep and a
