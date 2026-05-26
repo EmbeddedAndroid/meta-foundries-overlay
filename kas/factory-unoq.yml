@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# Arduino UNO Q variant of the agentic factory. Builds
+# lmp-factory-image-unoq against meta-qcom + meta-qcom-distro +
+# meta-qcom-3rdparty + meta-foundries.
+#
+# Produces a qcomflash tarball at
+#   tmp/deploy/images/uno-q/lmp-factory-image-unoq-*.qcomflash.tar.gz
+#
+# In-flight UNO Q BSP fixes that haven't landed on meta-qcom-3rdparty
+# fio-v1 yet should be added as overlay bbappends under this layer,
+# not patched into the BSP fork. Once stabilized, they graduate to
+# meta-qcom-3rdparty:fio-v1.
+
+header:
+  version: 14
+  includes:
+    - repo: meta-foundries
+      file: kas/ci/target-unoq.yml
+
+repos:
+  meta-foundries:
+    url: https://github.com/EmbeddedAndroid/meta-foundries
+    branch: main
+
+  meta-foundries-overlay:
+
+  meta-updater:
+    url: https://github.com/EmbeddedAndroid/meta-updater
+    branch: fio-v1
+
+  meta-qcom:
+    url: https://github.com/EmbeddedAndroid/meta-qcom
+    branch: fio-v1
+
+  meta-qcom-distro:
+    url: https://github.com/EmbeddedAndroid/meta-qcom-distro
+    branch: fio-v1
+
+  meta-qcom-3rdparty:
+    url: https://github.com/EmbeddedAndroid/meta-qcom-3rdparty
+    branch: fio-v1
+
+local_conf_header:
+  spdx-off: |
+    INHERIT:remove = "create-spdx"
+    INHERIT_DISTRO:remove = "create-spdx"
+  bbmask: |
+    # Overlay ships three image recipes (qcom rb3gen2, intel, uno-q);
+    # bitbake parses all .bb in BBFILES. Mask the non-UNO Q ones so
+    # they don't get parsed and don't show up in `bitbake-layers
+    # show-recipes`.
+    BBMASK += "recipes-samples/images/lmp-factory-image\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-intel\.bb$"
+
+target:
+  - lmp-factory-image-unoq
