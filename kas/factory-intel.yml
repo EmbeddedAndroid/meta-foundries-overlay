@@ -16,6 +16,7 @@ repos:
   meta-foundries:
     url: https://github.com/EmbeddedAndroid/meta-foundries
     branch: main
+    commit: 63a14e4e5b1f290cea0bb5a0f3e5bac64023ac68
 
   meta-foundries-overlay:
 
