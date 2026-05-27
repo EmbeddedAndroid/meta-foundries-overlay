@@ -1,6 +1,6 @@
 From: Tyler Baker <tyler@foundries.io>
 Date: Mon, 26 May 2026
-Subject: arm64: dts: qcom: arduino-imola: disable anx7625 + force usb_dwc3 dr_mode=peripheral
+Subject: arm64: dts: qcom: arduino-imola: disable anx7625
 
 Holding fix for a runtime crash on UNO Q (QRB2210 / arduino-imola) running
 linux-qcom-next 7.1-rc4. The anx7625 MIPI-DSI -> DP altmode bridge driver
@@ -13,58 +13,34 @@ NULL-derefs in drm_atomic_state_alloc during probe:
 A workqueue runs drm_self_refresh against a drm_atomic_state that doesn't
 exist because the DRM stack got torn down mid-probe. The kernel taints W
 and continues, but userspace never reaches multi-user.target -- rmtfs and
-tqftpserv never start, the WCN6750 firmware never loads, wlan0 never comes
+tqftpserv never start, the wcn3990 firmware never loads, wlan0 never comes
 up, no SSH path.
 
-With anx7625's Type-C role detection out of the picture, the DWC3
-controller's default dr_mode = "otg" waits forever for an external role
-signal. Force peripheral mode so the USB gadget framework has a UDC to
-bind to.
-
-Trade-offs:
-  - No DP altmode on USB-C (no external display over Type-C).
-  - USB-C is forced peripheral, so the UNO Q's main USB port becomes a
-    device port. Useful for exposing a USB CDC gadget to a host
-    (Bughopper rig); kills any host-mode use.
-  - MSM DRM stack still probes DSI panels and finds nothing to drive;
-    harmless WARN_ONs.
+Disabling the bridge in DT keeps the DRM stack out of the failing init
+path. The MSM DRM driver still probes DSI panels and finds nothing to
+drive (harmless WARN_ONs), but the rest of userspace proceeds.
+Trade-off: no DP altmode on USB-C (no external display over Type-C)
+until the upstream probe-order issue is fixed.
 
 Drop this patch when the upstream anx7625 probe-order issue is fixed
-(currently being worked by Loic Poulain on dri-devel; thread closest in
-shape is the PD-detect rework at lkml.org/lkml/2026/2/12/230, but the
-crash signature here is different).
+(currently being worked on dri-devel; thread closest in shape is the
+PD-detect rework at lkml.org/lkml/2026/2/12/230, though the crash
+signature here is different).
 
 Upstream-Status: Inappropriate [holding fix; not posted upstream]
 Signed-off-by: Tyler Baker <tyler@foundries.io>
 ---
- arch/arm64/boot/dts/qcom/qrb2210-arduino-imola.dts | 8 ++++++++
- 1 file changed, 8 insertions(+)
+ arch/arm64/boot/dts/qcom/qrb2210-arduino-imola.dts | 1 +
+ 1 file changed, 1 insertion(+)
 
 diff --git a/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola.dts b/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola.dts
 --- a/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola.dts
 +++ b/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola.dts
-@@ -237,6 +237,7 @@
- &i2c1 {
+@@ -246,6 +246,7 @@
  	status = "okay";
- 
+
  	anx7625: encoder@58 {
 +		status = "disabled";
  		compatible = "analogix,anx7625";
  		reg = <0x58>;
  		interrupts-extended = <&tlmm 81 IRQ_TYPE_EDGE_FALLING>;
-@@ -560,6 +561,13 @@
- &usb {
- 	status = "okay";
- };
- 
-+&usb_dwc3 {
-+	/* anx7625 is disabled (drm_atomic_state_alloc NULL deref); without
-+	 * Type-C role detection, OTG mode hangs waiting forever. Force
-+	 * peripheral so the gadget framework can bind to the UDC.
-+	 */
-+	dr_mode = "peripheral";
-+};
-+
- &usb_dwc3_hs {
- 	remote-endpoint = <&anx_hs_in>;
- };
