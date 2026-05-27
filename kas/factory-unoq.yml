@@ -52,6 +52,15 @@ local_conf_header:
   spdx-off: |
     INHERIT:remove = "create-spdx"
     INHERIT_DISTRO:remove = "create-spdx"
+  kernel-provider: |
+    # Switch UNO Q kernel to Arduino's curated linux-arduino 6.16 instead of
+    # meta-qcom's linux-qcom-next 7.1-rc4. The recipe lives in meta-qcom-3rdparty
+    # (recipes-kernel/linux/linux-arduino_6.16.bb, COMPATIBLE_MACHINE = uno-q)
+    # and pulls github.com/arduino/linux-qcom at SRCREV 0dd6551a (6.16.7),
+    # which already builds the qrb2210-arduino-imola DTB referenced by
+    # uno-q.conf. uno-q.conf's PREFERRED_PROVIDER_virtual/kernel uses a weak
+    # default (?=) so this override wins.
+    PREFERRED_PROVIDER_virtual/kernel:uno-q = "linux-arduino"
   bbmask: |
     # Mask the other 3 image recipes so they do not get parsed for the uno-q
     # build. Each image .bb requires layers not in the uno-q kas set
