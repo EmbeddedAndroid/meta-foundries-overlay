@@ -1,6 +1,6 @@
 # In-flight kernel changes for UNO Q (Arduino UNO Q / QRB2210 / imola).
 #
-# Three pieces:
+# Four pieces:
 #
 #  1. SRCREV bump for uno-q only. meta-qcom pins linux-qcom-next at
 #     qcom-next-7.0-20260507 (6e159a33b). For UNO Q we want the latest
@@ -20,6 +20,14 @@
 #     github.com/arduino/arduino-deb-images@kernel-configs/arduino.config.
 #     UNO Q userspace stack (audio, BT, exFAT, ANX bridge, ZRAM/ZSWAP)
 #     expects these knobs set.
+#
+#  4. arduino-imola DTS holding fix (0009-): disables anx7625 +
+#     forces usb_dwc3 dr_mode=peripheral. The anx7625 driver
+#     NULL-derefs in drm_atomic_state_alloc at probe on this kernel,
+#     which tears down the DRM stack mid-init and prevents userspace
+#     from reaching multi-user.target (rmtfs/tqftpserv never start ->
+#     no wifi). See feedback memory uart-console-loop-diagnosis and
+#     anx7625-panic-and-dts-disable. Drop when upstream fix lands.
 #
 # Drop the patch set + arduino.cfg once block-as-nvmem v2 lands in
 # qcom-next and the arduino knobs graduate into meta-qcom's
@@ -42,5 +50,6 @@ SRC_URI:append:uno-q = " \
     file://0006-bluetooth-hci_sync-add-nvmem-backed-bd-address.patch \
     file://0007-bluetooth-qca-set-nvmem-bd-address-quirks.patch \
     file://0008-arm64-dts-qcom-arduino-imola-describe-nvmem.patch \
+    file://0009-uno-q-dts-disable-anx7625-to-break-probe-cycle.patch \
     file://arduino.cfg \
 "
