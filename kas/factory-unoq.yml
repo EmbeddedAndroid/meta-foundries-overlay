@@ -41,13 +41,12 @@ repos:
   meta-qcom-3rdparty:
     url: https://github.com/EmbeddedAndroid/meta-qcom-3rdparty
     # uno-q-next = upstream main + qualcomm-linux/meta-qcom-3rdparty PR #28
-    # (edk2-based boot firmware + linux-qcom-next switch + anx7625 essential),
-    # plus a82ee9c (uno-q: pull in networkmanager meta-package) so a
-    # core-image-base-derived factory image lands networkmanager-wifi and
-    # can drive the radio. Rebase or drop the branch when #28 + the
-    # networkmanager bit merge upstream.
+    # (edk2-based boot firmware + linux-qcom-next switch + anx7625 essential).
+    # The networkmanager meta-package now arrives via qcom-console-image
+    # (lmp-factory-image-unoq's new base); no machine-level override needed.
+    # Rebase or drop the branch when #28 merges upstream.
     branch: uno-q-next
-    commit: a82ee9caecec450c8891af0ab225143aee096abc
+    commit: 51c01815efbc8fd557fc7f327ea1a45c9edfef49
 
 local_conf_header:
   spdx-off: |
