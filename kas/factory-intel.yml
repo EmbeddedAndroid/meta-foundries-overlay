@@ -25,6 +25,15 @@ repos:
     branch: fio-v2
 
 local_conf_header:
+  bbmask: |
+    # Mask the other 3 image recipes so they do not get parsed for the intel
+    # build. Each image .bb requires layers not in the intel kas set
+    # (e.g. qcom-console-image.bb lives in meta-qcom-distro; for intel
+    # without that, the require would ParseError).
+    BBMASK += "recipes-samples/images/lmp-factory-image\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-unoq\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-rubikpi3\.bb$"
+
   spdx-off: |
     INHERIT:remove = "create-spdx"
     INHERIT_DISTRO:remove = "create-spdx"

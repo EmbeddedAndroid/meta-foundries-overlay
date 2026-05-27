@@ -53,13 +53,12 @@ local_conf_header:
     INHERIT:remove = "create-spdx"
     INHERIT_DISTRO:remove = "create-spdx"
   bbmask: |
-    # Overlay ships three image recipes (qcom rb3gen2, intel, uno-q);
-    # bitbake parses all .bb in BBFILES. Mask the non-UNO Q ones so
-    # they don't get parsed and don't show up in `bitbake-layers
-    # show-recipes`.
+    # Mask the other 3 image recipes so they do not get parsed for the uno-q
+    # build. Each image .bb requires layers not in the uno-q kas set
+    # (e.g. qcom-console-image.bb lives in meta-qcom-distro; for uno-q
+    # without that, the require would ParseError).
     BBMASK += "recipes-samples/images/lmp-factory-image\.bb$"
     BBMASK += "recipes-samples/images/lmp-factory-image-intel\.bb$"
     BBMASK += "recipes-samples/images/lmp-factory-image-rubikpi3\.bb$"
-
 target:
   - lmp-factory-image-unoq

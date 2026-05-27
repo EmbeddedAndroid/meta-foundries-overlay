@@ -45,6 +45,15 @@ repos:
     branch: main
 
 local_conf_header:
+  bbmask: |
+    # Mask the other 3 image recipes so they do not get parsed for the rb3gen2
+    # build. Each image .bb requires layers not in the rb3gen2 kas set
+    # (e.g. qcom-console-image.bb lives in meta-qcom-distro; for rb3gen2
+    # without that, the require would ParseError).
+    BBMASK += "recipes-samples/images/lmp-factory-image-intel\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-unoq\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-rubikpi3\.bb$"
+
   # create-spdx hits a systemd / p11-kit circular dep and a
   # glibc-mtrace tar-on-collateral-recipe failure. Mirror the
   # Foundries CI local.conf setting until oe-core upstream fixes land.
