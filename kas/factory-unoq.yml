@@ -22,7 +22,7 @@ repos:
   meta-foundries:
     url: https://github.com/EmbeddedAndroid/meta-foundries
     branch: main
-    commit: 63a14e4e5b1f290cea0bb5a0f3e5bac64023ac68
+    commit: b9966ec2775d099d329fa6f6d8398a2625fc538f
 
   meta-foundries-overlay:
 
@@ -46,7 +46,7 @@ repos:
     # (lmp-factory-image-unoq's new base); no machine-level override needed.
     # Rebase or drop the branch when #28 merges upstream.
     branch: uno-q-next
-    commit: 51c01815efbc8fd557fc7f327ea1a45c9edfef49
+    commit: acf4347b122a784f02b7e7cd1bf46767623cb96b
 
 local_conf_header:
   spdx-off: |
@@ -59,6 +59,7 @@ local_conf_header:
     # show-recipes`.
     BBMASK += "recipes-samples/images/lmp-factory-image\.bb$"
     BBMASK += "recipes-samples/images/lmp-factory-image-intel\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-rubikpi3\.bb$"
 
 target:
   - lmp-factory-image-unoq

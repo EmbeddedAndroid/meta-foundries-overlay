@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# Thundercomm RUBIK Pi 3 variant of the agentic factory. Builds
+# lmp-factory-image-rubikpi3 against meta-qcom + meta-qcom-distro +
+# meta-qcom-3rdparty + meta-foundries.
+#
+# Produces a qcomflash tarball at
+#   tmp/deploy/images/qcs6490-thundercomm-rubikpi3/lmp-factory-image-rubikpi3-*.qcomflash.tar.gz
+#
+# The RUBIK Pi 3 BSP arrived in meta-qcom-3rdparty via
+# qualcomm-linux/meta-qcom-3rdparty PR #41 (firmware-qcom-boot-rubikpi3
+# + machine.conf + packagegroup); the dragonwing marketplace stack +
+# fastrpc/wifi/BT/lt9611 kernel patches sitting on top of that come
+# from EmbeddedAndroid/meta-qcom-3rdparty:uno-q-next and from this
+# overlay's dynamic-layers/qcom/recipes-{extended,kernel}.
+
+header:
+  version: 14
+  includes:
+    - repo: meta-foundries
+      file: kas/ci/target-rubikpi3.yml
+
+repos:
+  meta-foundries:
+    url: https://github.com/EmbeddedAndroid/meta-foundries
+    branch: main
+    commit: b9966ec2775d099d329fa6f6d8398a2625fc538f
+
+  meta-foundries-overlay:
+
+  meta-updater:
+    url: https://github.com/EmbeddedAndroid/meta-updater
+    branch: fio-v2
+
+  meta-qcom:
+    url: https://github.com/EmbeddedAndroid/meta-qcom
+    branch: fio-v2
+
+  meta-qcom-distro:
+    url: https://github.com/EmbeddedAndroid/meta-qcom-distro
+    branch: fio-v2
+
+  meta-qcom-3rdparty:
+    url: https://github.com/EmbeddedAndroid/meta-qcom-3rdparty
+    # uno-q-next holds PR #28 (EDK2 + linux-qcom-next for uno-q) plus
+    # PR #41 (RUBIK Pi 3 BSP) cherry-picked on top. The name is
+    # historical; the branch carries everything we're pinning in the
+    # main-next matrix until both PRs merge upstream.
+    branch: uno-q-next
+    commit: acf4347b122a784f02b7e7cd1bf46767623cb96b
+
+local_conf_header:
+  spdx-off: |
+    INHERIT:remove = "create-spdx"
+    INHERIT_DISTRO:remove = "create-spdx"
+  bbmask: |
+    # Overlay ships four image recipes (qcom rb3gen2, intel, uno-q,
+    # rubikpi3); bitbake parses all .bb in BBFILES. Mask the
+    # non-rubikpi3 ones so they don't get parsed and don't show up
+    # in `bitbake-layers show-recipes`.
+    BBMASK += "recipes-samples/images/lmp-factory-image\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-intel\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-unoq\.bb$"
+
+target:
+  - lmp-factory-image-rubikpi3
