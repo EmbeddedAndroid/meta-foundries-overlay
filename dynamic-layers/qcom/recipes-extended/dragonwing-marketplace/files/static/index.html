@@ -1,0 +1,145 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dragonwing — AI Developer</title>
+<link rel="icon" type="image/png" sizes="256x256" href="/static/favicon.png">
+<link rel="apple-touch-icon" href="/static/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head><body>
+
+<aside class="sidebar">
+  <div class="brand">
+    <img class="mark" src="/static/dragonwing.png" alt="Qualcomm Dragonwing">
+    <div class="brand-meta">
+      <div class="brand-title">Agentic Developer Experience</div>
+    </div>
+  </div>
+
+  <div class="side-section">
+    <div class="side-head">
+      <h3>Installed Apps</h3>
+      <div class="head-actions">
+        <button class="ico-btn" id="start-all-btn" title="Start all stopped apps" onclick="startAllApps()" disabled>▶</button>
+        <button class="ico-btn" id="stop-all-btn"  title="Stop all running apps"  onclick="stopAllApps()"  disabled>⏹</button>
+        <button class="ico-btn" title="Import .dwapp" onclick="document.getElementById('import-input').click()">⤓</button>
+        <input id="import-input" type="file" accept=".dwapp,.tgz,.tar.gz,application/gzip" style="display:none" onchange="importAppFile(this)">
+        <button class="ico-btn" title="Refresh" onclick="loadApps()">↻</button>
+      </div>
+    </div>
+    <div id="apps-list" class="apps-list"></div>
+  </div>
+
+  
+
+
+  <div class="side-section">
+    <div class="side-head">
+      <h3>Sessions</h3>
+      <div class="head-actions">
+        <button class="ico-btn" title="New chat" onclick="startNewSession()">＋</button>
+        <button class="ico-btn" title="Refresh" onclick="loadSessions()">↻</button>
+      </div>
+    </div>
+    <div id="sessions-list" class="sessions-list"></div>
+  </div>
+<div class="side-section">
+    <div class="side-head"><h3>API Settings</h3></div>
+    <button class="side-btn settings-btn" onclick="openSettings()">
+      <span class="key-dot" id="key-dot"></span> Configure Credentials
+    </button>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="muted-info">
+      <span class="chip-id">QCS6490</span> · Hexagon V68 NPU
+    </div>
+  </div>
+</aside>
+
+<main class="chat">
+  <div id="status-banner" class="status-banner" style="display:none"></div>
+
+  <header class="chat-head">
+    <div>
+      <h1 class="h-title">Agentic Developer Experience</h1>
+      <p class="h-sub">Building the future of edge AI on device</p>
+    </div>
+    <div class="chat-tools">
+      <span class="live-dot"></span>
+      <span class="mono" id="uptime-tag">live</span>
+      <select class="model-pill" id="model-picker" title="Anthropic model for the next send"></select>
+      <button class="ico-btn creds-btn" id="creds-btn" title="Credentials" onclick="openSettings()">🔑</button>
+    </div>
+  </header>
+
+  <div class="perf-strip" id="perf"></div>
+
+  <section class="thread" id="thread">
+    <div class="welcome">
+      <h2>Hello.</h2>
+      <p>I'm running on the device itself (Rubik Pi 3, QCS6490). I have unrestricted shell access via a <code>bash</code> tool — I can inspect, fix, build, deploy, and tear down whatever you point me at. No confirmations, no sandbox.</p>
+      <p class="hint">Try: <em>"What's the current NPU thermal? Is the Deal With It app running?"</em> or <em>"Build me a simple Flask hello-world container and add it to the marketplace."</em></p>
+      <div class="welcome-keyhint" id="welcome-keyhint" style="display:none">
+        <strong>Set your Anthropic API key first</strong> — open API Settings in the sidebar.
+      </div>
+    </div>
+  </section>
+
+  <form class="composer" id="composer" onsubmit="sendChat(event)">
+    <textarea id="input" rows="2" placeholder="Ask the agent to do something..."></textarea>
+    <button type="button" id="cancel-btn" style="display:none" onclick="cancelTurn()">Cancel</button>
+    <button type="submit" id="send-btn">Send ⏎</button>
+  </form>
+</main>
+
+
+<dialog id="app-modal">
+  <div class="app-modal-inner" id="app-modal-inner"></div>
+</dialog>
+
+<dialog id="settings-modal">
+  <div class="modal-head">
+    <h2>Credentials</h2>
+    <button class="x" onclick="document.getElementById('settings-modal').close()">×</button>
+  </div>
+  <div class="modal-body">
+    <div class="cred-card">
+      <div class="cred-head">
+        <span class="cred-title">Anthropic API Key</span>
+        <span class="key-dot" id="key-dot-modal"></span>
+      </div>
+      <input type="password" id="api-key-input" placeholder="sk-ant-..." spellcheck="false" autocomplete="off">
+      <label class="lbl-sub">Model <span class="lbl-optional">(optional · default claude-opus-4-7)</span></label>
+      <input type="text" id="api-model-input" list="model-options" placeholder="claude-opus-4-7" spellcheck="false" autocomplete="off">
+      <datalist id="model-options"></datalist>
+      <label class="lbl-sub">Base URL <span class="lbl-optional">(optional · default api.anthropic.com)</span></label>
+      <input type="text" id="api-base-url-input" placeholder="https://api.anthropic.com" spellcheck="false" autocomplete="off">
+      <p class="hint">Stored in your browser's localStorage only. Sent to the device on each chat request, never written to disk on the device. Different browsers (different humans) bring their own key — your usage is billed to your own Anthropic account. The optional Base URL lets you route through an LLM gateway or regional proxy that speaks the Anthropic Messages API.</p>
+      <div class="modal-row">
+        <button class="btn" onclick="clearKey()">Clear</button>
+        <button class="btn primary" onclick="saveKey()" id="save-key-btn">Save &amp; Verify</button>
+      </div>
+      <div class="verify-state" id="verify-state"></div>
+    </div>
+
+    <div class="cred-card">
+      <div class="cred-head">
+        <span class="cred-title">Qualcomm AI Hub Token</span>
+        <span class="key-dot" id="qai-dot"></span>
+      </div>
+      <input type="password" id="qai-token-input" placeholder="paste token from app.aihub.qualcomm.com → Settings → API" spellcheck="false" autocomplete="off">
+      <p class="hint">Written to <code>/root/.qai_hub/client.ini</code> on the device (perms 0600). The marketplace bind-mounts that file into the <code>qai-export</code> container at run time — never baked into images. Required only when the agent needs to export a new NPU model from AI Hub.</p>
+      <div class="modal-row">
+        <button class="btn" onclick="clearQaiToken()">Clear</button>
+        <button class="btn primary" onclick="saveQaiToken()" id="save-qai-btn">Save</button>
+      </div>
+      <div class="verify-state" id="qai-state"></div>
+    </div>
+  </div>
+</dialog>
+
+<script src="/static/app.js"></script>
+</body></html>

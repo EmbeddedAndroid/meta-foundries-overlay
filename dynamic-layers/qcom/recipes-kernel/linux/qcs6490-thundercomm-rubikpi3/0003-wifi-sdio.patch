@@ -1,0 +1,58 @@
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Wed, 13 May 2026 13:40:00 -0400
+Subject: [PATCH] arm64: dts: qcom: qcs6490-rubikpi3: enable AP6256 SDIO WiFi
+Upstream-Status: Pending
+
+The Thundercomm Rubik Pi 3 has an Ampak AP6256 module (Broadcom BCM43456
+WiFi + BCM4345C5 BT) wired to SDIO via sdhc_2 and UART7. The BT side is
+already described in the mainline DTS, but the WiFi side has no SDIO
+child node, so brcmfmac never sees the chip.
+
+Add a wifi@1 child under &sdhc_2 with compatible "brcm,bcm4329-fmac" (the
+catch-all binding all brcmfmac SDIO parts use; the actual chip ID is
+auto-discovered during probe). The host-wake interrupt is wired to TLMM
+GPIO 38, pinmux already defined as wifi_host_wake. Power rails come from
+the existing always-on vreg_wifi_1v8.
+
+Pair with brcmfmac43456-sdio.bin from rubikpi-ai/rubikpi3-firmware
+(renamed from fw_bcm43456c5_ag.bin) and the board-specific NVRAM at
+brcmfmac43456-sdio.thundercomm,rubikpi3.txt.
+
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ .../boot/dts/qcom/qcs6490-thundercomm-rubikpi3.dts | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/qcs6490-thundercomm-rubikpi3.dts b/arch/arm64/boot/dts/qcom/qcs6490-thundercomm-rubikpi3.dts
+index abcdef123456..abcdef123457 100644
+--- a/arch/arm64/boot/dts/qcom/qcs6490-thundercomm-rubikpi3.dts
++++ b/arch/arm64/boot/dts/qcom/qcs6490-thundercomm-rubikpi3.dts
+@@ -1000,11 +1000,25 @@
+ 	vmmc-supply = <&vreg_l9c_2p96>;
+ 	vqmmc-supply = <&vreg_l6c_2p96>;
+
++	bus-width = <4>;
++	#address-cells = <1>;
++	#size-cells = <0>;
++
+ 	non-removable;
+ 	keep-power-in-suspend;
+ 	/delete-property/ cd-gpios;
+
+ 	status = "okay";
++
++	wifi@1 {
++		compatible = "brcm,bcm4329-fmac";
++		reg = <1>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <38 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "host-wake";
++		pinctrl-names = "default";
++		pinctrl-0 = <&wifi_host_wake>;
++	};
+ };
+
+ /* Pin 19, 21, 23, 24 in 40-pin connector */
+
+--
+2.45.0

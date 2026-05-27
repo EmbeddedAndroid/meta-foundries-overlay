@@ -1,0 +1,43 @@
+#!/bin/sh
+# Dragonwing first-boot orchestrator. Idempotent; once the .done flag is
+# present systemd skips this unit via ConditionPathExists.
+#
+# Tasks:
+#   1. Seed /opt/qnn-libs from /root/cam-test/qnn-libs so non-cam-detect
+#      apps that bind-mount -v /opt/qnn-libs:/opt/qnn can resolve the
+#      QNN host libs without the cam-test image being present.
+#   2. Build the rubikpi3-cam-test:npu docker image, which is the FROM
+#      base for the cam-detect tile and for any user fork that chose the
+#      cam-test base. Builds against /root/cam-test/Dockerfile shipped
+#      by rubikpi3-cam-test-src.
+#
+# Both steps require docker (started by docker.service) and network
+# (apt-get for ubuntu:24.04 base layer). Failure of (2) leaves (1)
+# committed and skips the .done flag so systemd retries on next boot.
+set -eu
+
+log() { echo "[dragonwing-firstboot] $*"; }
+
+# Step 1: /opt/qnn-libs (always runs; cheap)
+if [ -d /root/cam-test/qnn-libs ] && [ ! -e /opt/qnn-libs/libQnnTFLiteDelegate.so ]; then
+    log "seeding /opt/qnn-libs from /root/cam-test/qnn-libs"
+    mkdir -p /opt/qnn-libs
+    cp -a /root/cam-test/qnn-libs/. /opt/qnn-libs/
+else
+    log "/opt/qnn-libs already populated; skipping"
+fi
+
+# Step 2: docker build rubikpi3-cam-test:npu
+if docker image inspect rubikpi3-cam-test:npu >/dev/null 2>&1; then
+    log "rubikpi3-cam-test:npu already built; skipping"
+else
+    if [ ! -f /root/cam-test/Dockerfile ]; then
+        log "ERROR: /root/cam-test/Dockerfile missing; cannot build"
+        exit 1
+    fi
+    log "docker build -t rubikpi3-cam-test:npu /root/cam-test"
+    docker build -t rubikpi3-cam-test:npu /root/cam-test
+fi
+
+touch /var/lib/dragonwing-firstboot.done
+log "done"

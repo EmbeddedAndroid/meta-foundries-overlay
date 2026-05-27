@@ -1,0 +1,20 @@
+[Unit]
+Description=Dragonwing first-boot: build rubikpi3-cam-test:npu and seed /opt/qnn-libs
+After=docker.service network-online.target time-sync.target
+Wants=network-online.target time-sync.target
+Requires=docker.service
+Before=dragonwing-marketplace.service
+ConditionPathExists=!/var/lib/dragonwing-firstboot.done
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/dragonwing-firstboot
+StandardOutput=journal
+StandardError=journal
+# Building the ubuntu:24.04-based image requires pulling ~1.1GB of apt
+# packages; give it up to 30 minutes on a slow link before failing.
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+[Unit]
+Description=Dragonwing App Marketplace
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/root/marketplace
+ExecStart=/usr/bin/python3 /root/marketplace/marketplace.py
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -53,3 +53,37 @@ SRC_URI:append:uno-q = " \
     file://0009-uno-q-dts-disable-anx7625-to-break-probe-cycle.patch \
     file://arduino.cfg \
 "
+
+# In-flight Rubik Pi 3 patches not yet in qcom-next:
+#   e8bd92c4a0d2 drm/bridge: lt9611: Add support for single Port B input
+#   ebcf2240a249 arm64: dts: qcom: qcs6490-rubikpi3: Use lt9611 DSI Port B
+#   draft        arm64: dts: qcom: qcs6490-rubikpi3: enable AP6256 SDIO WiFi
+#   v4 1-4/4     misc: fastrpc: Add missing bug fixes (Jianping Li, lore)
+#   draft        misc: fastrpc: refcount fastrpc_user from each buf (UAF fix)
+# Plus kconfig fragments to enable BCM4345C5 UART HCI (Bluetooth) and
+# brcmfmac SDIO (WiFi). Pulled from the rubrikpi3-next branch maintained
+# in EmbeddedAndroid/meta-qcom-3rdparty alongside the marketplace work.
+# 0006-fastrpc-alloc-entire-audiopd-rmem-in-probe.patch is kept on disk
+# but intentionally NOT in SRC_URI: it overlaps the lighter audiopd-init
+# alloc fix in 0004, and the 0004 + 0007 path is what matches mainline.
+# Kept for diagnostic re-bisects if the audiopd path needs rework.
+FILESEXTRAPATHS:prepend:qcs6490-thundercomm-rubikpi3 := "${THISDIR}/qcs6490-thundercomm-rubikpi3:"
+
+SRC_URI:append:qcs6490-thundercomm-rubikpi3 = " \
+    file://0001-lt9611-port-b.patch \
+    file://0002-dts-port-b.patch \
+    file://0003-wifi-sdio.patch \
+    file://0004-fastrpc-fix-audiopd-initial-alloc.patch \
+    file://0005-fastrpc-remove-buf-from-list-before-unmap.patch \
+    file://0007-fastrpc-buf-free-accept-null.patch \
+    file://0008-fastrpc-refcount-fl-from-dmabuf.patch \
+    file://bt-bcm.cfg \
+    file://wifi-bcm.cfg \
+"
+
+# fastrpc backports were authored against mainline; they apply with
+# offset/fuzz at our qcom-next SRCREV. Demote patch-fuzz from error
+# to warning so the build proceeds. Refresh the patches against the
+# pinned SRCREV when the SRCREV bumps.
+ERROR_QA:remove:qcs6490-thundercomm-rubikpi3 = "patch-fuzz"
+WARN_QA:append:qcs6490-thundercomm-rubikpi3 = " patch-fuzz"

@@ -1,0 +1,62 @@
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Thu, 14 May 2026 00:00:00 +0000
+Subject: [PATCH] misc: fastrpc: take a reference on fastrpc_user from each buf
+Upstream-Status: Inappropriate [local workaround; reference-counts fastrpc_user from dma-buf to close a UAF; not yet sent upstream]
+
+fastrpc_release (the dma_buf_ops .release callback) calls
+fastrpc_buf_free, which dereferences buf->fl->cctx. An exported dma-buf
+held by libcdsprpc / QNN HTP delegate can outlive fastrpc_device_release,
+which frees fl via the existing kref. Take a reference on the owning
+fastrpc_user from each buf at alloc time and drop it from fastrpc_buf_free
+so fl outlives any dma-buf that references it.
+
+fastrpc_user_get/put are defined static lower in this file;
+forward-declare them above fastrpc_buf_free.
+
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+--- a/drivers/misc/fastrpc.c
++++ b/drivers/misc/fastrpc.c
+@@ -432,14 +432,24 @@
+ 	return ret;
+ }
+ 
++/* Forward declarations: defined as static later in this file. Needed because
++ * fastrpc_buf_free() is invoked from the dma_buf .release path, where the
++ * fastrpc_user may have outlived its fd, and we drop the user ref here. */
++static void fastrpc_user_get(struct fastrpc_user *fl);
++static void fastrpc_user_put(struct fastrpc_user *fl);
++
+ static void fastrpc_buf_free(struct fastrpc_buf *buf)
+ {
++	struct fastrpc_user *fl;
++
+ 	if (!buf)
+ 		return;
+ 
++	fl = buf->fl;
+ 	dma_free_coherent(buf->dev, buf->size, buf->virt,
+-			  fastrpc_ipa_to_dma_addr(buf->fl->cctx, buf->dma_addr));
++			  fastrpc_ipa_to_dma_addr(fl->cctx, buf->dma_addr));
+ 	kfree(buf);
++	fastrpc_user_put(fl);
+ }
+ 
+ static int __fastrpc_buf_alloc(struct fastrpc_user *fl, struct device *dev,
+@@ -455,6 +465,8 @@
+ 	INIT_LIST_HEAD(&buf->node);
+ 	mutex_init(&buf->lock);
+ 
++	fastrpc_user_get(fl);
++
+ 	buf->fl = fl;
+ 	buf->virt = NULL;
+ 	buf->dma_addr = 0;
+@@ -465,6 +477,7 @@
+ 	buf->virt = dma_alloc_coherent(dev, buf->size, &buf->dma_addr,
+ 				       GFP_KERNEL);
+ 	if (!buf->virt) {
++		fastrpc_user_put(fl);
+ 		mutex_destroy(&buf->lock);
+ 		kfree(buf);
+ 		return -ENOMEM;
