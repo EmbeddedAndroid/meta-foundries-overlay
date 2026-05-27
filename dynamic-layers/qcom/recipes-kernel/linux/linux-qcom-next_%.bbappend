@@ -1,6 +1,6 @@
 # In-flight kernel changes for UNO Q (Arduino UNO Q / QRB2210 / imola).
 #
-# Four pieces:
+# Five pieces:
 #
 #  1. SRCREV bump for uno-q only. meta-qcom pins linux-qcom-next at
 #     qcom-next-7.0-20260507 (6e159a33b). For UNO Q we want the latest
@@ -29,6 +29,20 @@
 #     no wifi). See feedback memory uart-console-loop-diagnosis and
 #     anx7625-panic-and-dts-disable. Drop when upstream fix lands.
 #
+#  5. qcom_scm qseecom allowlist add (0010-): "arduino,imola". The
+#     qcom_scm driver guards qseecom binding behind a hard-coded list
+#     of validated machines; without an entry the kernel logs
+#     "qseecom: untested machine, skipping" and the qseecom platform
+#     device is never registered. Consequence on UNO Q is that the
+#     TZ-side TAs (uefisecapp, etc.) are unreachable from Linux, UEFI
+#     runtime variable services return EFI_DEVICE_ERROR, and
+#     systemd-gpt-auto-generator can't pick up the ESP. Adding the
+#     "arduino,imola" compatible to the allowlist is a small,
+#     reversible enabler. The qseecom re-entrancy concern noted in
+#     the comment immediately above the allowlist still applies;
+#     watch for SCM call deadlocks if the QRB2210 platform triggers
+#     re-entrant TA invocations.
+#
 # Drop the patch set + arduino.cfg once block-as-nvmem v2 lands in
 # qcom-next and the arduino knobs graduate into meta-qcom's
 # bsp-additions.cfg. Drop the SRCREV override once meta-qcom pins a
@@ -51,6 +65,7 @@ SRC_URI:append:uno-q = " \
     file://0007-bluetooth-qca-set-nvmem-bd-address-quirks.patch \
     file://0008-arm64-dts-qcom-arduino-imola-describe-nvmem.patch \
     file://0009-uno-q-dts-disable-anx7625-to-break-probe-cycle.patch \
+    file://0010-firmware-qcom-scm-allow-qseecom-on-arduino-imola.patch \
     file://arduino.cfg \
 "
 

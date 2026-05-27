@@ -1,0 +1,67 @@
+From: Tyler Baker <tyler@foundries.io>
+Date: Tue, 27 May 2026
+Subject: firmware: qcom: scm: allow qseecom on arduino,imola (UNO Q)
+
+The qcom_scm qseecom interface guards against unvalidated machines via
+qcom_scm_qseecom_allowlist[]: of_machine_device_match() against the DT
+root "compatible" walk, falling back to "untested machine, skipping" if
+no entry matches. The Arduino UNO Q (QRB2210 / qcom,qcm2290) is one of
+those skipped machines today, which leaves Linux without a working
+proxy to the TZ-side TAs (uefisecapp et al), and in turn leaves UEFI
+runtime variable services returning EFI_DEVICE_ERROR (status=0x80000000_00000007)
+from get_next_variable():
+
+  $ dmesg | grep efivars
+  [2.941219] efivars: get_next_variable: status=8000000000000007
+
+  $ ls /sys/firmware/efi/efivars/ | wc -l
+  0
+
+  $ findmnt /boot
+  (nothing — systemd-gpt-auto-generator gives up because
+   LoaderDevicePartUUID is never set in efivars)
+
+UNO Q's DT root compatible is:
+  arduino,imola
+  qcom,qrb2210
+  qcom,qcm2290
+
+This matches the existing allowlist pattern (board-level identifiers
+like "qcom,glymur-crd", "asus,vivobook-s15") so add "arduino,imola".
+
+After this patch:
+  - qcom_scm: convention: smc arm 64
+  - qcom_scm firmware:scm: qseecom: found qseecom with version 0x1402000
+  - (no "untested machine, skipping")
+  - qseecom platform device registered
+  - userspace can issue TA invocations via qseecom
+
+Note: this alone does not guarantee UEFI runtime variables come up
+on the QRB2210 (the EDK2 runtime variable path may still fail at the
+uefisecapp <-> uefivarstore layer). But it is the prerequisite the
+kernel-side check has been blocking.
+
+Risk: the comment immediately above the allowlist states "We do not
+yet support re-entrant calls via the qseecom interface. To prevent
+any potential issues with this, only allow validated machines for
+now." We have not verified that the QRB2210 platform avoids the
+re-entrant qseecom pattern; if it doesn't, qseecom calls could
+deadlock. The fallback (no qseecom binding) is the current state.
+
+Upstream-Status: Inappropriate [local enablement / awaiting validation]
+Signed-off-by: Tyler Baker <tyler@foundries.io>
+---
+ drivers/firmware/qcom/qcom_scm.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/firmware/qcom/qcom_scm.c b/drivers/firmware/qcom/qcom_scm.c
+--- a/drivers/firmware/qcom/qcom_scm.c
++++ b/drivers/firmware/qcom/qcom_scm.c
+@@ -2287,6 +2287,7 @@
+  + any potential issues with this, only allow validated machines for now.
+  */
+ static const struct of_device_id qcom_scm_qseecom_allowlist[] __maybe_unused = {
++	{ .compatible = "arduino,imola" },
+ 	{ .compatible = "asus,vivobook-s15" },
+ 	{ .compatible = "asus,vivobook-s15-x1p4" },
+ 	{ .compatible = "asus,zenbook-a14-ux3407qa" },
