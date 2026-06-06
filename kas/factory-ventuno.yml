@@ -52,6 +52,13 @@ local_conf_header:
   spdx-off: |
     INHERIT:remove = "create-spdx"
     INHERIT_DISTRO:remove = "create-spdx"
+  ventuno-wifi-pcie-pme: |
+    # The QCA2066 Wi-Fi (PCIe) hits an arm-smmu translation fault on a
+    # PME/MSI write, blocking WMI DMA so every runtime WMI command times
+    # out and the radio never scans. Canonical's Dragonwing image (which
+    # works) boots with pcie_pme=nomsi; match it here. EXPERIMENTAL -
+    # kept in the overlay (not the meta-qcom-3rdparty PR) until proven.
+    OSTREE_KERNEL_ARGS:append:ventuno-q = " pcie_pme=nomsi"
   bbmask: |
     # Mask the other image recipes so they do not get parsed for the
     # ventuno-q build (each requires layers/machines not in this kas set).
