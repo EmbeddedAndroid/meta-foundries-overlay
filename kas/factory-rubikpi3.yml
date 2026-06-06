@@ -59,6 +59,7 @@ local_conf_header:
     # (e.g. qcom-console-image.bb lives in meta-qcom-distro; for rubikpi3
     # without that, the require would ParseError).
     BBMASK += "recipes-samples/images/lmp-factory-image\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-ventuno\.bb$"
     BBMASK += "recipes-samples/images/lmp-factory-image-intel\.bb$"
     BBMASK += "recipes-samples/images/lmp-factory-image-unoq\.bb$"
 target:

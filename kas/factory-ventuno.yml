@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# Arduino VENTUNO Q (monza / QCS8275) variant of the agentic factory.
+# Builds lmp-factory-image-ventuno against meta-qcom + meta-qcom-distro
+# + meta-qcom-3rdparty + meta-foundries.
+#
+# Produces a qcomflash tarball at
+#   tmp/deploy/images/ventuno-q/lmp-factory-image-ventuno-*.qcomflash.tar.gz
+#
+# The VENTUNO Q BSP (machine conf, firmware recipe, monza kernel from
+# kernel-topics early/hwe/monza, packagegroup, camx) lives on the
+# meta-qcom-3rdparty ventuno-q-next branch (= uno-q-next + the
+# qualcomm-linux PR #16 ventuno commits, all machine-scoped :ventuno-q
+# so uno-q still builds identically from it).
+
+header:
+  version: 14
+  includes:
+    - repo: meta-foundries
+      file: kas/ci/target-ventuno.yml
+
+repos:
+  meta-foundries:
+    url: https://github.com/EmbeddedAndroid/meta-foundries
+    branch: main
+    commit: a97db281fcb4696b6249e4598466ec3dc0542892
+
+  meta-foundries-overlay:
+
+  meta-updater:
+    url: https://github.com/EmbeddedAndroid/meta-updater
+    branch: fio-v2
+
+  meta-qcom:
+    url: https://github.com/EmbeddedAndroid/meta-qcom
+    branch: fio-v2
+
+  meta-qcom-distro:
+    url: https://github.com/EmbeddedAndroid/meta-qcom-distro
+    branch: fio-v2
+
+  meta-qcom-3rdparty:
+    url: https://github.com/EmbeddedAndroid/meta-qcom-3rdparty
+    # ventuno-q-next = uno-q-next + qualcomm-linux/meta-qcom-3rdparty PR #16
+    # (Arduino VENTUNO Q / monza / QCS8275 support). All ventuno bits are
+    # :ventuno-q machine-scoped, so this branch also builds uno-q
+    # identically. Rebase or drop when PR #16 + #28 land upstream.
+    branch: ventuno-q-next
+    commit: 205d7645c2aebc6638756e43b2f490adf120fc14
+
+local_conf_header:
+  spdx-off: |
+    INHERIT:remove = "create-spdx"
+    INHERIT_DISTRO:remove = "create-spdx"
+  bbmask: |
+    # Mask the other image recipes so they do not get parsed for the
+    # ventuno-q build (each requires layers/machines not in this kas set).
+    BBMASK += "recipes-samples/images/lmp-factory-image\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-intel\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-unoq\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-rubikpi3\.bb$"
+target:
+  - lmp-factory-image-ventuno
