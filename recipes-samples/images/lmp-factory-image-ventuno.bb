@@ -10,7 +10,7 @@ LICENSE = "MIT"
 # stack, but we mirror the UNO Q console base for a low-risk first
 # bring-up; switch the require to qcom-multimedia-image.bb later if the
 # wayland/weston/gstreamer stack is wanted.
-require recipes-products/images/qcom-console-image.bb
+require recipes-products/images/qcom-multimedia-image.bb
 require recipes-samples/images/feature-fio.inc
 
 CORE_IMAGE_BASE_INSTALL += "docker-cli-config"
