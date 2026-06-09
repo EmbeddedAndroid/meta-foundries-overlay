@@ -10,7 +10,6 @@ LIC_FILES_CHKSUM = "file://LICENSE.MIT;md5=3e312ffe200717dca92f8cec0dae6290"
 
 SRC_URI = "git://github.com/linux-msm/hexagon-dsp-binaries.git;branch=trunk;protocol=https"
 SRCREV = "68efa4770d51fb2ba881d28f9c46af9c02fc878f"
-S = "${WORKDIR}/git"
 
 COMPATIBLE_MACHINE = "ventuno-q"
 
