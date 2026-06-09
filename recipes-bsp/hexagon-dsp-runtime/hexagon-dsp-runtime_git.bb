@@ -17,7 +17,7 @@ COMPATIBLE_MACHINE = "ventuno-q"
 INHIBIT_PACKAGE_STRIP = "1"
 INHIBIT_PACKAGE_DEBUG_SPLIT = "1"
 INHIBIT_SYSROOT_STRIP = "1"
-INSANE_SKIP:${PN} += "arch ldflags textrel already-stripped staticdev libdir"
+INSANE_SKIP:${PN} += "arch ldflags textrel already-stripped staticdev libdir file-rdeps"
 
 RIDE = "qcs8300/Qualcomm/QCS8300-RIDE"
 CDSP_VER = "cdsp-DSP.AT.1.0.1-00196-LEMANS-2"
