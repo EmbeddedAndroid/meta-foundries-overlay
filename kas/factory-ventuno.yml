@@ -46,7 +46,7 @@ repos:
     # :ventuno-q machine-scoped, so this branch also builds uno-q
     # identically. Rebase or drop when PR #16 + #28 land upstream.
     branch: ventuno-q-next
-    commit: b5fb99613c994c67a00d3f9aa66d090cd08817a7
+    commit: ab99f370c043b9c8807c881f7d29cdfb982b2548
 
 local_conf_header:
   spdx-off: |
