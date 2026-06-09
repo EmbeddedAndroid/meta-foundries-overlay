@@ -23,7 +23,7 @@ repos:
   meta-foundries:
     url: https://github.com/EmbeddedAndroid/meta-foundries
     branch: main
-    commit: a97db281fcb4696b6249e4598466ec3dc0542892
+    commit: 8984461e1e37d718fdcfecf31040b23ed61f90a6
 
   meta-foundries-overlay:
 
@@ -52,6 +52,14 @@ local_conf_header:
   spdx-off: |
     INHERIT:remove = "create-spdx"
     INHERIT_DISTRO:remove = "create-spdx"
+  ventuno-deferred-probe: |
+    # The graphics stack (DRM_MSM, SA_GPUCC_8775P, SA_DISPCC_8775P) is
+    # modular and loaded late by systemd; the kernel default
+    # deferred_probe_timeout can fire before the gpu/gmu/mdss/bridge chain
+    # finishes binding, leaving /dev/dri absent (intermittent, boot-to-boot).
+    # Give the modular SoC drivers time to settle, matching the Qualcomm
+    # Linux Debian reference image which boots with deferred_probe_timeout=30.
+    OSTREE_KERNEL_ARGS:append:ventuno-q = " deferred_probe_timeout=30"
   bbmask: |
     # Mask the other image recipes so they do not get parsed for the
     # ventuno-q build (each requires layers/machines not in this kas set).
