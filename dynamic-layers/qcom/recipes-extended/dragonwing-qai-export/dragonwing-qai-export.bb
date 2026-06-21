@@ -19,8 +19,8 @@ S = "${UNPACKDIR}"
 inherit allarch
 
 do_install() {
-    install -d ${D}/root/qai-export
-    install -m 0644 ${UNPACKDIR}/Dockerfile ${D}/root/qai-export/Dockerfile
+    install -d ${D}${datadir}/dragonwing/qai-export
+    install -m 0644 ${UNPACKDIR}/Dockerfile ${D}${datadir}/dragonwing/qai-export/Dockerfile
 }
 
-FILES:${PN} = "/root/qai-export"
+FILES:${PN} = "${datadir}/dragonwing/qai-export"

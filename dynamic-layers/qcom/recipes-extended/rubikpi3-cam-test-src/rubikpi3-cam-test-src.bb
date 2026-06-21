@@ -39,20 +39,20 @@ S = "${UNPACKDIR}"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
 do_install() {
-    install -d ${D}/root/cam-test/assets
-    install -d ${D}/root/cam-test/models
-    install -d ${D}/root/cam-test/qnn-libs
+    install -d ${D}${datadir}/dragonwing/cam-test/assets
+    install -d ${D}${datadir}/dragonwing/cam-test/models
+    install -d ${D}${datadir}/dragonwing/cam-test/qnn-libs
 
-    install -m 0644 ${UNPACKDIR}/Dockerfile     ${D}/root/cam-test/Dockerfile
-    install -m 0755 ${UNPACKDIR}/detect.py      ${D}/root/cam-test/detect.py
-    install -m 0755 ${UNPACKDIR}/run.sh         ${D}/root/cam-test/run.sh
-    install -m 0644 ${UNPACKDIR}/make_logo.py   ${D}/root/cam-test/make_logo.py
+    install -m 0644 ${UNPACKDIR}/Dockerfile     ${D}${datadir}/dragonwing/cam-test/Dockerfile
+    install -m 0755 ${UNPACKDIR}/detect.py      ${D}${datadir}/dragonwing/cam-test/detect.py
+    install -m 0755 ${UNPACKDIR}/run.sh         ${D}${datadir}/dragonwing/cam-test/run.sh
+    install -m 0644 ${UNPACKDIR}/make_logo.py   ${D}${datadir}/dragonwing/cam-test/make_logo.py
 
-    install -m 0644 ${UNPACKDIR}/assets/sunglasses.png      ${D}/root/cam-test/assets/sunglasses.png
-    install -m 0644 ${UNPACKDIR}/assets/dragonwing-raw.png  ${D}/root/cam-test/assets/dragonwing-raw.png
+    install -m 0644 ${UNPACKDIR}/assets/sunglasses.png      ${D}${datadir}/dragonwing/cam-test/assets/sunglasses.png
+    install -m 0644 ${UNPACKDIR}/assets/dragonwing-raw.png  ${D}${datadir}/dragonwing/cam-test/assets/dragonwing-raw.png
 
-    install -m 0644 ${UNPACKDIR}/models/yolov8_det.tflite   ${D}/root/cam-test/models/yolov8_det.tflite
-    install -m 0644 ${UNPACKDIR}/models/coco_labels.txt     ${D}/root/cam-test/models/coco_labels.txt
+    install -m 0644 ${UNPACKDIR}/models/yolov8_det.tflite   ${D}${datadir}/dragonwing/cam-test/models/yolov8_det.tflite
+    install -m 0644 ${UNPACKDIR}/models/coco_labels.txt     ${D}${datadir}/dragonwing/cam-test/models/coco_labels.txt
 
     # Locate QNN aarch64 host libs inside the QAIRT zip. Layout has varied
     # across QAIRT versions (aarch64-oe-linux-gcc11.2, aarch64-ubuntu-gcc9.4,
@@ -69,18 +69,18 @@ do_install() {
     if [ -z "$picked" ]; then
         bbfatal "rubikpi3-cam-test-src: could not find aarch64 QNN host libs in $qnn_root; contents: $(ls $qnn_root 2>/dev/null)"
     fi
-    install -m 0755 $picked/libQnnCpu.so                  ${D}/root/cam-test/qnn-libs/
-    install -m 0755 $picked/libQnnGpu.so                  ${D}/root/cam-test/qnn-libs/
-    install -m 0755 $picked/libQnnGpuProfilingReader.so   ${D}/root/cam-test/qnn-libs/
-    install -m 0755 $picked/libQnnHtp.so                  ${D}/root/cam-test/qnn-libs/
-    install -m 0755 $picked/libQnnHtpPrepare.so           ${D}/root/cam-test/qnn-libs/
-    install -m 0755 $picked/libQnnHtpV68CalculatorStub.so ${D}/root/cam-test/qnn-libs/
-    install -m 0755 $picked/libQnnHtpV68Stub.so           ${D}/root/cam-test/qnn-libs/
-    install -m 0755 $picked/libQnnSystem.so               ${D}/root/cam-test/qnn-libs/
-    install -m 0755 $picked/libQnnTFLiteDelegate.so       ${D}/root/cam-test/qnn-libs/
+    install -m 0755 $picked/libQnnCpu.so                  ${D}${datadir}/dragonwing/cam-test/qnn-libs/
+    install -m 0755 $picked/libQnnGpu.so                  ${D}${datadir}/dragonwing/cam-test/qnn-libs/
+    install -m 0755 $picked/libQnnGpuProfilingReader.so   ${D}${datadir}/dragonwing/cam-test/qnn-libs/
+    install -m 0755 $picked/libQnnHtp.so                  ${D}${datadir}/dragonwing/cam-test/qnn-libs/
+    install -m 0755 $picked/libQnnHtpPrepare.so           ${D}${datadir}/dragonwing/cam-test/qnn-libs/
+    install -m 0755 $picked/libQnnHtpV68CalculatorStub.so ${D}${datadir}/dragonwing/cam-test/qnn-libs/
+    install -m 0755 $picked/libQnnHtpV68Stub.so           ${D}${datadir}/dragonwing/cam-test/qnn-libs/
+    install -m 0755 $picked/libQnnSystem.so               ${D}${datadir}/dragonwing/cam-test/qnn-libs/
+    install -m 0755 $picked/libQnnTFLiteDelegate.so       ${D}${datadir}/dragonwing/cam-test/qnn-libs/
 }
 
-FILES:${PN} = "/root/cam-test"
+FILES:${PN} = "${datadir}/dragonwing/cam-test"
 
 # .so files inside /root/cam-test/qnn-libs/ are aarch64 host ELFs (same arch as
 # target) but get copied as data, not linked. Skip standard library QA — they

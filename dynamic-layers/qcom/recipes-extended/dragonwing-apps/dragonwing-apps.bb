@@ -30,21 +30,21 @@ S = "${UNPACKDIR}"
 inherit allarch
 
 do_install() {
-    install -d ${D}/root/apps/_template/assets
-    install -m 0644 ${UNPACKDIR}/_template/Dockerfile ${D}/root/apps/_template/Dockerfile
-    install -m 0755 ${UNPACKDIR}/_template/main.py    ${D}/root/apps/_template/main.py
-    install -m 0755 ${UNPACKDIR}/_template/run.sh     ${D}/root/apps/_template/run.sh
-    install -m 0644 ${UNPACKDIR}/_template/README.md  ${D}/root/apps/_template/README.md
+    install -d ${D}${datadir}/dragonwing/apps/_template/assets
+    install -m 0644 ${UNPACKDIR}/_template/Dockerfile ${D}${datadir}/dragonwing/apps/_template/Dockerfile
+    install -m 0755 ${UNPACKDIR}/_template/main.py    ${D}${datadir}/dragonwing/apps/_template/main.py
+    install -m 0755 ${UNPACKDIR}/_template/run.sh     ${D}${datadir}/dragonwing/apps/_template/run.sh
+    install -m 0644 ${UNPACKDIR}/_template/README.md  ${D}${datadir}/dragonwing/apps/_template/README.md
     install -m 0644 ${UNPACKDIR}/_template/assets/dragonwing.png \
-        ${D}/root/apps/_template/assets/dragonwing.png
+        ${D}${datadir}/dragonwing/apps/_template/assets/dragonwing.png
 
-    install -d ${D}/root/apps/cam-detect/assets
-    install -m 0644 ${UNPACKDIR}/cam-detect/Dockerfile ${D}/root/apps/cam-detect/Dockerfile
-    install -m 0755 ${UNPACKDIR}/cam-detect/main.py    ${D}/root/apps/cam-detect/main.py
-    install -m 0755 ${UNPACKDIR}/cam-detect/run.sh     ${D}/root/apps/cam-detect/run.sh
-    install -m 0644 ${UNPACKDIR}/cam-detect/README.md  ${D}/root/apps/cam-detect/README.md
+    install -d ${D}${datadir}/dragonwing/apps/cam-detect/assets
+    install -m 0644 ${UNPACKDIR}/cam-detect/Dockerfile ${D}${datadir}/dragonwing/apps/cam-detect/Dockerfile
+    install -m 0755 ${UNPACKDIR}/cam-detect/main.py    ${D}${datadir}/dragonwing/apps/cam-detect/main.py
+    install -m 0755 ${UNPACKDIR}/cam-detect/run.sh     ${D}${datadir}/dragonwing/apps/cam-detect/run.sh
+    install -m 0644 ${UNPACKDIR}/cam-detect/README.md  ${D}${datadir}/dragonwing/apps/cam-detect/README.md
     install -m 0644 ${UNPACKDIR}/cam-detect/assets/dragonwing.png \
-        ${D}/root/apps/cam-detect/assets/dragonwing.png
+        ${D}${datadir}/dragonwing/apps/cam-detect/assets/dragonwing.png
 }
 
-FILES:${PN} = "/root/apps"
+FILES:${PN} = "${datadir}/dragonwing/apps"

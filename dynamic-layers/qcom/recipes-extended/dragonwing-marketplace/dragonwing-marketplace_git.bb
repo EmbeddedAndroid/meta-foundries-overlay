@@ -15,6 +15,7 @@ SRC_URI = " \
     file://html.py \
     file://static/ \
     file://dragonwing-marketplace.service \
+    file://dragonwing-rootseed.conf \
 "
 
 inherit allarch systemd
@@ -23,16 +24,20 @@ SYSTEMD_SERVICE:${PN} = "dragonwing-marketplace.service"
 SYSTEMD_AUTO_ENABLE = "enable"
 
 do_install() {
-    install -d ${D}/root/marketplace
-    install -m 0755 ${UNPACKDIR}/marketplace.py ${D}/root/marketplace/marketplace.py
-    install -m 0644 ${UNPACKDIR}/html.py        ${D}/root/marketplace/html.py
+    install -d ${D}${datadir}/dragonwing/marketplace
+    install -m 0755 ${UNPACKDIR}/marketplace.py ${D}${datadir}/dragonwing/marketplace/marketplace.py
+    install -m 0644 ${UNPACKDIR}/html.py        ${D}${datadir}/dragonwing/marketplace/html.py
 
-    install -d ${D}/root/marketplace/static
-    install -m 0644 ${UNPACKDIR}/static/*       ${D}/root/marketplace/static/
+    install -d ${D}${datadir}/dragonwing/marketplace/static
+    install -m 0644 ${UNPACKDIR}/static/*       ${D}${datadir}/dragonwing/marketplace/static/
 
     install -d ${D}${systemd_system_unitdir}
     install -m 0644 ${UNPACKDIR}/dragonwing-marketplace.service \
         ${D}${systemd_system_unitdir}/dragonwing-marketplace.service
+
+    install -d ${D}${nonarch_libdir}/tmpfiles.d
+    install -m 0644 ${UNPACKDIR}/dragonwing-rootseed.conf \
+        ${D}${nonarch_libdir}/tmpfiles.d/dragonwing-rootseed.conf
 
     # State directories the marketplace writes to at runtime; pre-create so
     # the first POST to /api/apps/install doesn't race a missing parent.
@@ -41,8 +46,9 @@ do_install() {
 }
 
 FILES:${PN} = " \
-    /root/marketplace \
+    ${datadir}/dragonwing/marketplace \
     ${systemd_system_unitdir}/dragonwing-marketplace.service \
+    ${nonarch_libdir}/tmpfiles.d/dragonwing-rootseed.conf \
     ${localstatedir}/lib/dragonwing-sessions \
     ${localstatedir}/lib/dragonwing-feeds \
 "
@@ -62,9 +68,3 @@ INSANE_SKIP:${PN} += "already-stripped"
 # place. Live changes to /root/marketplace/* are not the supported path —
 # the agent should propose patches to /tmp instead and the operator bumps
 # the vendored snapshot in this recipe. Pairs with the SYSTEM_PROMPT rule.
-pkg_postinst_ontarget:${PN}() {
-    chattr +i /root/marketplace/marketplace.py /root/marketplace/html.py
-    chattr +i /root/marketplace/static/index.html
-    chattr +i /root/marketplace/static/app.js
-    chattr +i /root/marketplace/static/style.css
-}
