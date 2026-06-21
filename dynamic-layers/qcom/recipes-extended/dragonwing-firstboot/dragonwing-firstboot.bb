@@ -40,3 +40,7 @@ FILES:${PN} = " \
 "
 
 RDEPENDS:${PN} = "rubikpi3-cam-test-src"
+
+# The cam-test NPU base image differs by Hexagon arch: ventuno-q (QCS8300)
+# uses the V75 variant; rubikpi3 / rb3gen2 (QCS6490, V68) use the default.
+RDEPENDS:${PN}:ventuno-q = "ventuno-cam-test-src"
