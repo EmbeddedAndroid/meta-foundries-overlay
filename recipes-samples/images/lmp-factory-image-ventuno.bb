@@ -24,3 +24,10 @@ INCOMPATIBLE_LICENSE_EXCEPTIONS:append:ventuno-q = " firmware-qcom-boot-qcs8275-
 # NPU/DSP stack (hexagon-dsp-binaries + qairt-sdk-hexagon-v75) is pulled
 # by the ventuno-q machine config (MACHINE_EXTRA_RRECOMMENDS), same as the
 # upstream qcs8300-ride/sa8775p-ride packagegroups. No image-level add needed.
+
+# Host-side QNN/QAIRT runtime for NPU (Hexagon HTP) inference: provides
+# libQnnTFLiteDelegate.so, libQnnHtp.so + V75 stub, qnn-net-run, SNPE. The
+# machine config already pulls qairt-sdk-hexagon-v75 (the signed DSP-side
+# skels for QCS8300); without the host runtime the TFLite HTP external
+# delegate cannot load. (~200 MB; revisit slimming later.)
+IMAGE_INSTALL:append = " qairt-sdk"
