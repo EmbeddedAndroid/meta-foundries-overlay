@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# Qualcomm RB3 Gen 2 (qcm6490 / QCS6490) variant of the agentic factory.
+# Builds lmp-factory-image-rb3gen2 with the Dragonwing marketplace stack.
+# RB3 Gen 2 shares the QCS6490 SoC + Hexagon V68 cDSP with RUBIK Pi 3, so
+# the V68 cam-test base (rubikpi3-cam-test-src) is reused verbatim.
+
+header:
+  version: 14
+  includes:
+    - repo: meta-foundries
+      file: kas/ci/target-rb3gen2.yml
+
+repos:
+  meta-foundries:
+    url: https://github.com/EmbeddedAndroid/meta-foundries
+    branch: main
+    commit: 8984461e1e37d718fdcfecf31040b23ed61f90a6
+
+  meta-foundries-overlay:
+
+  meta-updater:
+    url: https://github.com/EmbeddedAndroid/meta-updater
+    branch: fio-v2
+
+  meta-qcom:
+    url: https://github.com/EmbeddedAndroid/meta-qcom
+    branch: fio-v2
+
+  meta-qcom-distro:
+    url: https://github.com/EmbeddedAndroid/meta-qcom-distro
+    branch: fio-v2
+
+  meta-qcom-3rdparty:
+    url: https://github.com/EmbeddedAndroid/meta-qcom-3rdparty
+    branch: uno-q-next
+    commit: acf4347b122a784f02b7e7cd1bf46767623cb96b
+
+local_conf_header:
+  spdx-off: |
+    INHERIT:remove = "create-spdx"
+    INHERIT_DISTRO:remove = "create-spdx"
+  bbmask: |
+    BBMASK += "recipes-samples/images/lmp-factory-image\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-ventuno\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-intel\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-unoq\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-rubikpi3\.bb$"
+
+target:
+  - lmp-factory-image-rb3gen2

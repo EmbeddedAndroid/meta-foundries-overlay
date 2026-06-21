@@ -4,7 +4,7 @@ marketplace uses to build the rubikpi3-cam-test:npu Docker image at \
 first boot. Bundles the ubuntu:24.04-based Dockerfile, the YOLOv8 + \
 Haar face detection pipeline (detect.py), the dragonwing logo + \
 sunglasses overlay assets, the yolov8_det.tflite model exported for \
-QCS6490 HTP (w8a8) and the COCO label list, plus the aarch64 QNN host \
+QCS8300 HTP (V75) (w8a8) and the COCO label list, plus the aarch64 QNN host \
 libraries extracted from QAIRT 2.36 (libQnnTFLiteDelegate, libQnnHtp*, \
 libQnnSystem). The image itself is not baked into the rootfs: the \
 dragonwing-firstboot one-shot runs 'docker build' against this tree on \
@@ -15,7 +15,7 @@ LICENSE = "CLOSED"
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
-QAIRT_VERSION = "2.36.0.250627"
+QAIRT_VERSION = "2.43.0.260128"
 
 SRC_URI = " \
     file://Dockerfile \
@@ -30,7 +30,7 @@ SRC_URI = " \
 "
 
 # Same archive as rubikpi3-npu-runtime; bitbake dedupes by sha256.
-SRC_URI[qairt.sha256sum] = "66e705f31b169702d6cce71aed4c986212c983caa5608bc3f60f24fa81eabc4b"
+SRC_URI[qairt.sha256sum] = "e3fce35419310bf80aa2947442a4b39366d80237c4bd72946b77832f71b75223"
 
 S = "${UNPACKDIR}"
 
@@ -74,8 +74,8 @@ do_install() {
     install -m 0755 $picked/libQnnGpuProfilingReader.so   ${D}/root/cam-test/qnn-libs/
     install -m 0755 $picked/libQnnHtp.so                  ${D}/root/cam-test/qnn-libs/
     install -m 0755 $picked/libQnnHtpPrepare.so           ${D}/root/cam-test/qnn-libs/
-    install -m 0755 $picked/libQnnHtpV68CalculatorStub.so ${D}/root/cam-test/qnn-libs/
-    install -m 0755 $picked/libQnnHtpV68Stub.so           ${D}/root/cam-test/qnn-libs/
+    install -m 0755 $picked/libQnnHtpV75CalculatorStub.so ${D}/root/cam-test/qnn-libs/
+    install -m 0755 $picked/libQnnHtpV75Stub.so           ${D}/root/cam-test/qnn-libs/
     install -m 0755 $picked/libQnnSystem.so               ${D}/root/cam-test/qnn-libs/
     install -m 0755 $picked/libQnnTFLiteDelegate.so       ${D}/root/cam-test/qnn-libs/
 }
@@ -87,4 +87,4 @@ FILES:${PN} = "/root/cam-test"
 # are not part of the system runtime path.
 INSANE_SKIP:${PN} += "already-stripped ldflags dev-so libdir"
 
-COMPATIBLE_MACHINE = "(qcs6490-thundercomm-rubikpi3|rb3gen2-core-kit)"
+COMPATIBLE_MACHINE = "(ventuno-q)"

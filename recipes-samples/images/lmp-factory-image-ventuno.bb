@@ -31,3 +31,15 @@ INCOMPATIBLE_LICENSE_EXCEPTIONS:append:ventuno-q = " firmware-qcom-boot-qcs8275-
 # skels for QCS8300); without the host runtime the TFLite HTP external
 # delegate cannot load. (~200 MB; revisit slimming later.)
 IMAGE_INSTALL:append = " qairt-sdk"
+
+# Dragonwing marketplace stack (:8080 agentic app dashboard) + NPU cam-test
+# demo. Framework recipes are allarch and shared with rubikpi3; the cam-test
+# NPU base uses the V75 variant (ventuno-cam-test-src) built against QAIRT
+# 2.43 Hexagon V75 host stubs, matching qairt-sdk-hexagon-v75 in this image.
+IMAGE_INSTALL:append = " \
+    dragonwing-marketplace \
+    dragonwing-firstboot \
+    dragonwing-apps \
+    dragonwing-qai-export \
+    ventuno-cam-test-src \
+"
