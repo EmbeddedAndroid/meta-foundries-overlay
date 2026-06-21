@@ -21,8 +21,6 @@ CORE_IMAGE_BASE_INSTALL += "docker-cli-config"
 # bbappend exception; scoped here because we build our own image.
 INCOMPATIBLE_LICENSE_EXCEPTIONS:append:ventuno-q = " firmware-qcom-boot-qcs8275-arduino-monza:LICENSE.qcom-2"
 
-# DSP-side FastRPC runtime (fastrpc_shell + signed skels) matching the
-# on-device cdsp firmware, required for cDSP/aDSP FastRPC (NPU offload).
-# Without it cdsprpcd cannot load the shell onto the DSP and every
-# FastRPC session-create fails. From linux-msm/hexagon-dsp-binaries.
-IMAGE_INSTALL:append = " hexagon-dsp-runtime"
+# NPU/DSP stack (hexagon-dsp-binaries + qairt-sdk-hexagon-v75) is pulled
+# by the ventuno-q machine config (MACHINE_EXTRA_RRECOMMENDS), same as the
+# upstream qcs8300-ride/sa8775p-ride packagegroups. No image-level add needed.
