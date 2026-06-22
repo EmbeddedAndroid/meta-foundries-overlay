@@ -39,5 +39,19 @@ else
     docker build -t rubikpi3-cam-test:npu /root/cam-test
 fi
 
+# Step 3: docker build marketplace-kiosk:latest (HDMI desktop browser).
+# Best-effort -- the desktop branding works without it; a failed/slow build
+# (Chromium via snapshot.debian.org) must not wedge first boot.
+KIOSK_CTX=/usr/share/dragonwing/kiosk
+if docker image inspect marketplace-kiosk:latest >/dev/null 2>&1; then
+    log "marketplace-kiosk:latest already built; skipping"
+elif [ -f "$KIOSK_CTX/Dockerfile" ]; then
+    log "docker build -t marketplace-kiosk:latest $KIOSK_CTX (best-effort)"
+    docker build -t marketplace-kiosk:latest "$KIOSK_CTX" \
+        || log "WARN: marketplace-kiosk build failed; desktop launcher will retry (deliver via registry if persistent)"
+else
+    log "no kiosk build context at $KIOSK_CTX; skipping (dragonwing-weston-desktop not installed?)"
+fi
+
 touch /var/lib/dragonwing-firstboot.done
 log "done"

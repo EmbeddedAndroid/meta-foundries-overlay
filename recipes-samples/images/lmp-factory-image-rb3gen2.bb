@@ -20,3 +20,6 @@ IMAGE_INSTALL:append = " \
 
 # /usr/lib/dsp compat symlink for the multi-SoC DSP runtime layout.
 require recipes-samples/images/dsp-compat.inc
+
+# Dragonwing Weston kiosk desktop UI (wallpaper, Marketplace launcher, kiosk).
+require recipes-samples/images/dragonwing-desktop.inc
