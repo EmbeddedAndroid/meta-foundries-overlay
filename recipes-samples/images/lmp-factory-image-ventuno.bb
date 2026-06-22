@@ -43,3 +43,6 @@ IMAGE_INSTALL:append = " \
     dragonwing-qai-export \
     ventuno-cam-test-src \
 "
+
+# /usr/lib/dsp compat symlink for the multi-SoC DSP runtime layout.
+require recipes-samples/images/dsp-compat.inc
