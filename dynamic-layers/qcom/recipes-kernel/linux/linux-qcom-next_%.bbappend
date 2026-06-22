@@ -102,3 +102,15 @@ SRC_URI:append:qcs6490-thundercomm-rubikpi3 = " \
 # pinned SRCREV when the SRCREV bumps.
 ERROR_QA:remove:qcs6490-thundercomm-rubikpi3 = "patch-fuzz"
 WARN_QA:append:qcs6490-thundercomm-rubikpi3 = " patch-fuzz"
+
+# misc: fastrpc — fix context leak + hang on signal-interrupted invoke
+# (Anandu Krishnan E, lore drm-ai-reviews 2026-05-25). Touches only
+# drivers/misc/fastrpc.c; applied to ALL qcom platforms building
+# linux-qcom-next (ventuno-q, rubikpi3, rb3gen2, uno-q, ...). Submitted
+# upstream. Authored against mainline, so it may apply with offset/fuzz
+# at our pinned SRCREVs — demote patch-fuzz from error to warning.
+# https://lore.gitlab.freedesktop.org/drm-ai-reviews/20260525124222.3082420-1-anandu.e@oss.qualcomm.com/
+FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+SRC_URI:append = " file://0001-misc-fastrpc-fix-context-leak-and-hang.patch"
+ERROR_QA:remove = "patch-fuzz"
+WARN_QA:append = " patch-fuzz"
