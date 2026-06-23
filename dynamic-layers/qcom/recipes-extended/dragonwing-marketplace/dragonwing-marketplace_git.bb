@@ -16,6 +16,7 @@ SRC_URI = " \
     file://static/ \
     file://dragonwing-marketplace.service \
     file://dragonwing-rootseed.conf \
+    file://dragonwing-state.conf \
 "
 
 inherit allarch systemd
@@ -39,18 +40,19 @@ do_install() {
     install -m 0644 ${UNPACKDIR}/dragonwing-rootseed.conf \
         ${D}${nonarch_libdir}/tmpfiles.d/dragonwing-rootseed.conf
 
-    # State directories the marketplace writes to at runtime; pre-create so
-    # the first POST to /api/apps/install doesn't race a missing parent.
-    install -d ${D}${localstatedir}/lib/dragonwing-sessions
-    install -d ${D}${localstatedir}/lib/dragonwing-feeds
+    # Runtime state dirs. Created + owned via tmpfiles at boot (NOT baked into
+    # /var, which is stateful on ostree): /feeds must be writable by uid 1000
+    # because app containers run as --user 1000:1000 and write their live
+    # preview JPEG there, while the marketplace (root) only reads it.
+    install -m 0644 ${UNPACKDIR}/dragonwing-state.conf \
+        ${D}${nonarch_libdir}/tmpfiles.d/dragonwing-state.conf
 }
 
 FILES:${PN} = " \
     ${datadir}/dragonwing/marketplace \
     ${systemd_system_unitdir}/dragonwing-marketplace.service \
     ${nonarch_libdir}/tmpfiles.d/dragonwing-rootseed.conf \
-    ${localstatedir}/lib/dragonwing-sessions \
-    ${localstatedir}/lib/dragonwing-feeds \
+    ${nonarch_libdir}/tmpfiles.d/dragonwing-state.conf \
 "
 
 RDEPENDS:${PN} = " \
