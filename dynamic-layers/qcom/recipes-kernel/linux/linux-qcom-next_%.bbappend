@@ -103,6 +103,23 @@ SRC_URI:append:qcs6490-thundercomm-rubikpi3 = " \
 ERROR_QA:remove:qcs6490-thundercomm-rubikpi3 = "patch-fuzz"
 WARN_QA:append:qcs6490-thundercomm-rubikpi3 = " patch-fuzz"
 
+# RB3 Gen 2 (qcm6490) has the same Hexagon V68 cDSP and the same 7.0+git
+# fastrpc.c as Rubik Pi 3, but ran stock meta-qcom without these driver
+# fixes -- so its cDSP compute PD never comes up (kernel logs "no reserved
+# DMA memory for FASTRPC", QNN HTP logs "createUnsignedPD not supported")
+# and NPU inference silently falls back to CPU. Apply the same fastrpc
+# driver patches as rubikpi3 (driver-only; the rubikpi3 lt9611/wifi/DT bits
+# are deliberately excluded). Reuse the rubikpi3 files dir.
+FILESEXTRAPATHS:prepend:rb3gen2-core-kit := "${THISDIR}/qcs6490-thundercomm-rubikpi3:"
+SRC_URI:append:rb3gen2-core-kit = " \
+    file://0004-fastrpc-fix-audiopd-initial-alloc.patch \
+    file://0005-fastrpc-remove-buf-from-list-before-unmap.patch \
+    file://0007-fastrpc-buf-free-accept-null.patch \
+    file://0008-fastrpc-refcount-fl-from-dmabuf.patch \
+"
+ERROR_QA:remove:rb3gen2-core-kit = "patch-fuzz"
+WARN_QA:append:rb3gen2-core-kit = " patch-fuzz"
+
 # misc: fastrpc — fix context leak + hang on signal-interrupted invoke
 # (Anandu Krishnan E, lore drm-ai-reviews 2026-05-25). Touches only
 # drivers/misc/fastrpc.c. The patch is kernel-version-specific: it applies
