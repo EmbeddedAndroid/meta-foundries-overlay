@@ -105,12 +105,14 @@ WARN_QA:append:qcs6490-thundercomm-rubikpi3 = " patch-fuzz"
 
 # misc: fastrpc — fix context leak + hang on signal-interrupted invoke
 # (Anandu Krishnan E, lore drm-ai-reviews 2026-05-25). Touches only
-# drivers/misc/fastrpc.c; applied to ALL qcom platforms building
-# linux-qcom-next (ventuno-q, rubikpi3, rb3gen2, uno-q, ...). Submitted
-# upstream. Authored against mainline, so it may apply with offset/fuzz
-# at our pinned SRCREVs — demote patch-fuzz from error to warning.
+# drivers/misc/fastrpc.c. The patch is kernel-version-specific: it applies
+# to the 7.1-rc4+git tree (verified on ventuno-q) but NOT to the 7.0+git
+# tree used by rb3gen2/rubikpi3, where fastrpc.c differs (do_patch fails).
+# Scope it to ventuno-q only; rb3gen2/rubikpi3 (7.0) and uno-q (7.1 but a
+# different SRCREV) would each need the patch rebased + verified for their
+# tree. Demote patch-fuzz from error to warning where it does apply.
 # https://lore.gitlab.freedesktop.org/drm-ai-reviews/20260525124222.3082420-1-anandu.e@oss.qualcomm.com/
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
-SRC_URI:append = " file://0001-misc-fastrpc-fix-context-leak-and-hang.patch"
-ERROR_QA:remove = "patch-fuzz"
-WARN_QA:append = " patch-fuzz"
+SRC_URI:append:ventuno-q = " file://0001-misc-fastrpc-fix-context-leak-and-hang.patch"
+ERROR_QA:remove:ventuno-q = "patch-fuzz"
+WARN_QA:append:ventuno-q = " patch-fuzz"
