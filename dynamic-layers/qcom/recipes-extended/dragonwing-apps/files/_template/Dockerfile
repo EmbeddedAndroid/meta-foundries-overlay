@@ -22,6 +22,7 @@ ENV LD_LIBRARY_PATH=/opt/qnn:/usr/lib
 
 # App files - REPLACE WITH YOUR APP
 COPY main.py /main.py
+COPY closebtn.py /closebtn.py
 COPY run.sh  /run.sh
 COPY assets/ /assets/
 RUN chmod +x /main.py /run.sh

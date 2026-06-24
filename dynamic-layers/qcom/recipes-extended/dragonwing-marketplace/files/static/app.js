@@ -218,7 +218,7 @@ function updateBulkButtons() {
 async function startAllApps() {
   const btn = document.getElementById('start-all-btn'); btn.classList.add('busy');
   try {
-    await Promise.all(_appsCache.filter(a => a.id !== 'app-builder' && !a.running)
+    await Promise.all(_appsCache.filter(a => a.id !== 'app-builder' && !a.running && !a.blocked)
       .map(a => fetch(`/api/apps/${a.id}/start`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({force: true}) })));
   } finally {
     btn.classList.remove('busy'); setTimeout(loadApps, 800);
@@ -260,17 +260,25 @@ function portChipsHtml(ports) {
 
 function renderTile(app) {
   const el = document.createElement('div');
-  el.className = 'tile' + (app.running ? ' running' : '');
+  el.className = 'tile' + (app.running ? ' running' : '') + (app.blocked ? ' blocked' : '');
   el.dataset.appId = app.id;
   const cover = app.cover_image ? `<img src="${app.cover_image}">` : '⚡';
+  // `blocked` comes from the server (app_view): the app declares a capability
+  // the device can't satisfy right now (e.g. camera app, no camera attached).
+  const statusText = app.blocked === 'no_camera'
+    ? 'Camera required'
+    : (app.status || 'Idle');
+  const blockedTip = app.blocked === 'no_camera'
+    ? '<div class="tile-blocked-tip">Connect a USB camera to run this app</div>'
+    : '';
   el.innerHTML = `
     <div class="tile-summary">
       <div class="tile-cover">${cover}</div>
       <div class="tile-body">
-        <div class="tile-name-row"><span class="tile-name">${app.name}</span>${app.has_draft ? '<span class="draft-tag tile-draft">DRAFT</span>' : ''}${capChipsHtml(app.capabilities)}${portChipsHtml(app.ports)}</div>
-        <div class="tile-status">${app.status || 'Idle'}</div>
+        <div class="tile-name-row"><span class="tile-name">${app.name}</span>${app.has_draft ? '<span class="draft-tag tile-draft">DRAFT</span>' : ''}${app.deployed ? '<span class="deploy-tag tile-deploy" title="Launches at every boot via systemd">DEPLOYED</span>' : ''}${capChipsHtml(app.capabilities)}${portChipsHtml(app.ports)}</div>
+        <div class="tile-status">${statusText}</div>
       </div>
-    </div>`;
+    </div>${blockedTip}`;
   el.addEventListener('click', () => openAppModal(app.id));
   return el;
 }
@@ -497,6 +505,22 @@ function streamFrom(sid, fromIdx) {
   }));
   _es.addEventListener('tool_result', wrap((e) => {
     const p = JSON.parse(e.data); if (_toolEls[p.id]) { fillToolResult(_toolEls[p.id], p.output); markToolRunning(_toolEls[p.id], false); }
+  }));
+  _es.addEventListener('usage', wrap((e) => {
+    try {
+      const p = JSON.parse(e.data);
+      const el = document.getElementById('token-meter');
+      if (!el) return;
+      const t = p.totals || {};
+      const fmt = (n) => { n = n || 0; return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n); };
+      const tin = (t.input_tokens || 0) + (t.cache_read_input_tokens || 0) + (t.cache_creation_input_tokens || 0);
+      el.textContent = '\u2191 ' + fmt(tin) + ' \u2193 ' + fmt(t.output_tokens) + ' \u00b7 ctx ' + fmt(p.context_tokens);
+      el.title = 'Session tokens \u2014 input: ' + tin.toLocaleString() +
+        ' (cache read ' + (t.cache_read_input_tokens || 0).toLocaleString() +
+        ', cache write ' + (t.cache_creation_input_tokens || 0).toLocaleString() +
+        ') \u00b7 output: ' + (t.output_tokens || 0).toLocaleString() +
+        ' \u00b7 current context: ' + (p.context_tokens || 0).toLocaleString();
+    } catch {}
   }));
   _es.addEventListener('error', wrap((e) => {
     setThinking(false);
@@ -764,9 +788,13 @@ function renderAppModal(app) {
     <div class="app-controls">
       ${app.description ? `<p class="app-desc">${escapeHtml(app.description)}</p>` : ''}
       ${seg}
+      ${app.blocked === 'no_camera' ? '<p class="app-desc" style="color:var(--dw-warn)">⚠ This app needs a camera and none is connected. Connect a USB camera to launch it.</p>' : ''}
       <div class="app-actions">
-        <button class="btn primary" data-modal-act="start" ${app.running ? 'disabled' : ''}>Launch</button>
+        <button class="btn primary" data-modal-act="start" ${app.running || app.blocked ? 'disabled' : ''} ${app.blocked === 'no_camera' ? 'title="Connect a USB camera to run this app"' : ''}>Launch</button>
         <button class="btn"         data-modal-act="stop"  ${!app.running ? 'disabled' : ''}>Stop</button>
+        ${app.deployed
+          ? `<button class="btn" data-modal-act="recall" title="Remove the systemd service that launches this app at boot — back to manual launches">Recall</button>`
+          : `<button class="btn" data-modal-act="deploy" title="Install a systemd service that launches this app at every boot and keeps it running">Deploy</button>`}
         ${app.type === 'source' && !app.has_draft ? `<button class="btn" data-modal-act="modify" title="Improve this app — opens a new chat session with an editable working copy">Modify</button>` : ''}
         ${app.has_draft ? `<button class="btn primary" data-modal-act="commit" title="Make the current source the committed state — drops the snapshot">Commit</button>` : ''}
         ${app.has_draft ? `<button class="btn danger" data-modal-act="reset" title="Discard modifications, restore original source, rebuild + restart">Reset</button>` : ''}
@@ -774,7 +802,7 @@ function renderAppModal(app) {
         ${app.type === 'source' ? `<button class="btn" data-modal-act="export" title="Download .dwapp bundle">Export</button>` : ''}
         <button class="btn danger"  data-modal-act="uninstall" style="flex:0 0 auto; padding-left:18px; padding-right:18px;">Remove</button>
       </div>
-      ${app.type ? `<div class="app-pubmeta">type: <code>${app.type}</code>${app.version ? ' · v' + escapeHtml(app.version) : ''}${app.author ? ' · ' + escapeHtml(app.author) : ''}${app.forked_from ? ' · forked from <code>' + escapeHtml(app.forked_from) + '</code>' : ''}${app.has_draft ? ' · <span class="draft-tag">DRAFT</span>' : ''}</div>` : ''}
+      ${app.type ? `<div class="app-pubmeta">type: <code>${app.type}</code>${app.version ? ' · v' + escapeHtml(app.version) : ''}${app.author ? ' · ' + escapeHtml(app.author) : ''}${app.forked_from ? ' · forked from <code>' + escapeHtml(app.forked_from) + '</code>' : ''}${app.has_draft ? ' · <span class="draft-tag">DRAFT</span>' : ''}${app.deployed ? ' · <span class="deploy-tag" title="dragonwing-app-' + app.id + '.service launches this app at boot">DEPLOYED</span>' : ''}</div>` : ''}
     </div>`;
 }
 function bindAppModal(app) {
@@ -794,6 +822,18 @@ function bindAppModal(app) {
     }
     if (act === 'export') {
       window.location.href = `/api/apps/${app.id}/export`;
+      return;
+    }
+    if (act === 'deploy' || act === 'recall') {
+      b.disabled = true; b.textContent = act === 'deploy' ? 'Deploying…' : 'Recalling…';
+      const r = await fetch(`/api/apps/${app.id}/${act}`, {method: 'POST'});
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        alert((act === 'deploy' ? 'Deploy' : 'Recall') + ' failed: ' + (d.error || r.status));
+        b.disabled = false; b.textContent = act === 'deploy' ? 'Deploy' : 'Recall';
+        return;
+      }
+      setTimeout(() => { loadApps(); openAppModal(app.id); }, 300);
       return;
     }
     if (act === 'modify') {
@@ -844,6 +884,10 @@ function bindAppModal(app) {
     const r = await fetch(`/api/apps/${app.id}/${act}`, { method: 'POST' });
     if (r.status === 409 && act === 'start') {
       const data = await r.json();
+      if (data.reason === 'no_camera') {
+        alert(data.message || 'This app needs a camera and none is connected.');
+        b.disabled = false; return;
+      }
       const names = (data.conflicts || []).map(c => `${c.held_by_name} (${c.resource})`).join(', ');
       if (confirm(`Cannot launch — currently held by: ${names}.\n\nStop them and launch "${app.name}"?`)) {
         await fetch(`/api/apps/${app.id}/start`, {
@@ -987,3 +1031,49 @@ setInterval(async () => {
   } catch (e) {}
 }, 5000);
 
+
+// ---- Platform identity + camera presence ----
+// The sidebar chip, welcome line, and camera dot are all populated from the
+// device (/api/system/info, /api/system/camera) — nothing board-specific is
+// hardcoded in the UI. When camera presence flips, the app grid re-renders so
+// camera-gated tiles grey/ungrey live.
+let _camPresent = null;
+async function loadPlatformInfo() {
+  try {
+    const r = await fetch('/api/system/info');
+    const j = await r.json();
+    const el = document.getElementById('platform-info');
+    if (el) {
+      const bits = [];
+      if (j.soc) bits.push(`<span class="chip-id">${escapeHtml(j.soc)}</span>`);
+      if (j.hexagon) bits.push(`Hexagon ${escapeHtml(j.hexagon)} NPU`);
+      if (!bits.length && j.board) bits.push(escapeHtml(j.board));
+      el.innerHTML = bits.join(' · ') || 'unknown platform';
+      el.title = j.summary || 'Detected from the device at startup';
+    }
+    const w = document.getElementById('welcome-hw');
+    if (w && (j.board || j.soc)) {
+      w.textContent = ` (${[j.board, j.soc].filter(Boolean).join(', ')})`;
+    }
+  } catch (e) {}
+}
+async function camPoll() {
+  try {
+    const r = await fetch('/api/system/camera');
+    const j = await r.json();
+    const dot = document.getElementById('cam-dot');
+    const txt = document.getElementById('cam-text');
+    if (dot) {
+      dot.style.background = j.present ? '#00d4a0' : '#ff5555';
+      dot.style.boxShadow  = j.present ? '0 0 6px #00d4a0' : '0 0 6px #ff5555';
+    }
+    if (txt) {
+      txt.textContent = j.present ? 'camera: online' : 'camera: MISSING - replug';
+      txt.style.color = j.present ? '' : '#ff5555';
+    }
+    if (_camPresent !== null && _camPresent !== j.present) loadApps();
+    _camPresent = j.present;
+  } catch (e) {}
+}
+loadPlatformInfo();
+camPoll(); setInterval(camPoll, 5000);

@@ -15,6 +15,7 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 SRC_URI = " \
     file://_template/Dockerfile \
     file://_template/main.py \
+    file://_template/closebtn.py \
     file://_template/run.sh \
     file://_template/README.md \
     file://_template/assets/dragonwing.png \
@@ -33,6 +34,7 @@ do_install() {
     install -d ${D}${datadir}/dragonwing/apps/_template/assets
     install -m 0644 ${UNPACKDIR}/_template/Dockerfile ${D}${datadir}/dragonwing/apps/_template/Dockerfile
     install -m 0755 ${UNPACKDIR}/_template/main.py    ${D}${datadir}/dragonwing/apps/_template/main.py
+    install -m 0755 ${UNPACKDIR}/_template/closebtn.py ${D}${datadir}/dragonwing/apps/_template/closebtn.py
     install -m 0755 ${UNPACKDIR}/_template/run.sh     ${D}${datadir}/dragonwing/apps/_template/run.sh
     install -m 0644 ${UNPACKDIR}/_template/README.md  ${D}${datadir}/dragonwing/apps/_template/README.md
     install -m 0644 ${UNPACKDIR}/_template/assets/dragonwing.png \

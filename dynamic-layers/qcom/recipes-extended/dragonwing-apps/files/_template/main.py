@@ -29,7 +29,7 @@ if MODEL:
         from tflite_runtime.interpreter import Interpreter, load_delegate
     delegates = []
     try:
-        delegates.append(load_delegate(QNN_LIB, options={"backend_type": QNN_BACK}))
+        delegates.append(load_delegate(QNN_LIB, options={"backend_type": QNN_BACK, **({"cache_dir": os.environ["QNN_CACHE_DIR"]} if os.environ.get("QNN_CACHE_DIR") else {})}))
     except Exception as e:
         print(f"[app] WARN QNN load: {e!r}", flush=True)
     try:
@@ -129,6 +129,18 @@ cap = cv2.VideoCapture(GST_IN, cv2.CAP_GSTREAMER)
 if not cap.isOpened(): sys.exit("camera open failed")
 out = cv2.VideoWriter(GST_OUT, cv2.CAP_GSTREAMER, 0, 30.0, (W, H), True)
 if not out.isOpened(): sys.exit("wayland output open failed")
+
+# In-frame red X close button (fullscreen apps only, so a windowed app
+# never grabs the mouse). closebtn reads the USB mouse directly and asks
+# the marketplace to stop this app; it no-ops if there is no mouse.
+closebtn = None
+if FULLSCREEN:
+    try:
+        import closebtn
+        closebtn.start(W, H)
+    except Exception as _cbe:
+        closebtn = None
+        print(f'[app] closebtn unavailable: {_cbe!r}', flush=True)
 print(f"[app] pipelines open; npu={using_npu}", flush=True)
 
 t0 = time.time(); fcount = 0; fps_recent = 0.0; t_last = t0
@@ -144,6 +156,7 @@ while True:
     if logo is not None:
         fh, fw = frame.shape[:2]
         alpha_blit(frame, logo, fw - logo.shape[1] - 22, fh - logo.shape[0] - 22)
+    if closebtn: closebtn.draw(frame)
     out.write(frame)
     if fcount % 4 == 0:
         try: cv2.imwrite(f"/feeds/{os.environ.get('APP_ID','app')}.jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])

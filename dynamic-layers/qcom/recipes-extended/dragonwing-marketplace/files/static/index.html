@@ -53,8 +53,11 @@
   </div>
 
   <div class="sidebar-footer">
-    <div class="muted-info">
-      <span class="chip-id">QCS6490</span> · Hexagon V68 NPU
+    <!-- Populated by loadPlatformInfo() from /api/system/info — the platform
+         identity is detected from the device, never hardcoded here. -->
+    <div class="muted-info" id="platform-info">detecting hardware…</div>
+    <div class="muted-info" id="cam-status" title="USB camera state">
+      <span id="cam-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#666;margin-right:6px"></span><span id="cam-text">camera: checking</span>
     </div>
   </div>
 </aside>
@@ -68,6 +71,7 @@
       <p class="h-sub">Building the future of edge AI on device</p>
     </div>
     <div class="chat-tools">
+      <span id="token-meter" style="font-variant-numeric:tabular-nums;color:#888;font-size:12px;margin-right:10px;align-self:center;white-space:nowrap" title="Session token usage"></span>
       <span class="live-dot"></span>
       <span class="mono" id="uptime-tag">live</span>
       <select class="model-pill" id="model-picker" title="Anthropic model for the next send"></select>
@@ -79,9 +83,9 @@
 
   <section class="thread" id="thread">
     <div class="welcome">
-      <h2>Hello.</h2>
-      <p>I'm running on the device itself (Rubik Pi 3, QCS6490). I have unrestricted shell access via a <code>bash</code> tool — I can inspect, fix, build, deploy, and tear down whatever you point me at. No confirmations, no sandbox.</p>
-      <p class="hint">Try: <em>"What's the current NPU thermal? Is the Deal With It app running?"</em> or <em>"Build me a simple Flask hello-world container and add it to the marketplace."</em></p>
+      <h2>Let's build.</h2>
+      <p>I'm an agent running on the silicon itself<span id="welcome-hw"></span>, with full root access to the device. I can profile the hardware, design and build real applications, run them on the NPU, GPU, and ISP, and publish them to the marketplace. Any task, any app: the only limit is your imagination.</p>
+      <p class="hint">Try: <em>"Profile the hardware and tell me what apps you can build me."</em> or <em>"Tell me more about the system and its capabilities."</em></p>
       <div class="welcome-keyhint" id="welcome-keyhint" style="display:none">
         <strong>Set your Anthropic API key first</strong> — open API Settings in the sidebar.
       </div>

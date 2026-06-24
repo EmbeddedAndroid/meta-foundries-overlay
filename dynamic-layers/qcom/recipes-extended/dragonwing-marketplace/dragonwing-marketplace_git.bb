@@ -3,7 +3,7 @@ DESCRIPTION = "Single-file Python http.server that serves a chat-first agent \
 plus an app marketplace on :8080. Manages /root/apps/<id>/ scaffolds, \
 spawns docker containers for each app with the right mounts/devices for \
 camera + NPU + Wayland, and persists state under /var/lib/dragonwing-*. \
-Source is vendored under files/ (snapshot of EmbeddedAndroid/age@682d8aa) \
+Source is vendored under files/ (snapshot of EmbeddedAndroid/age@8a08988) \
 to avoid a git fetch against a private remote at bitbake time."
 
 LICENSE = "CLOSED"

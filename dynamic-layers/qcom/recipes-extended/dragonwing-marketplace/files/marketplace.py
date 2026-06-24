@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Dragonwing AI Developer — chat-first agent + marketplace, single-file http server."""
-import http.server, socketserver, json, subprocess, os, signal, threading, time, re, uuid, http.client, tarfile, shutil, io
+import http.server, socketserver, json, subprocess, os, signal, threading, time, re, uuid, http.client, tarfile, shutil, io, glob
+try:
+    import grp as _grp
+    INPUT_GID = _grp.getgrnam("input").gr_gid
+except Exception:
+    INPUT_GID = None
 
 PORT = 8080
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -83,6 +88,122 @@ def sh(cmd, timeout=30):
         r.stderr = ((e.stderr or b'').decode('utf-8', 'replace') if isinstance(e.stderr, (bytes, bytearray)) else (e.stderr or '')) + f'\n[timed out after {timeout}s]'
         return r
 
+# --- Hardware discovery -----------------------------------------------------
+# Everything the marketplace and the onboard agent say about the platform is
+# read from the running system, not hardcoded, so the same image works on any
+# Dragonwing-class board (QCS6490, QCS8275, SA8775P, ...).
+
+def _read_first(path, max_bytes=4096):
+    """Stripped contents of a small sysfs/procfs/DT file, or None."""
+    try:
+        with open(path, 'rb') as f:
+            v = f.read(max_bytes).decode('utf-8', 'replace').strip().strip('\x00')
+        return v or None
+    except OSError:
+        return None
+
+def _dt_compatible():
+    """Device-tree compatible entries (NUL-separated), e.g. ['arduino,ventuno', 'qcom,qcs8275']."""
+    try:
+        with open('/proc/device-tree/compatible', 'rb') as f:
+            return [s.decode('utf-8', 'replace') for s in f.read(4096).split(b'\x00') if s]
+    except OSError:
+        return []
+
+def _detect_hexagon_version():
+    """Hexagon arch from the QNN HTP skel libraries shipped with the DSP
+    runtime (libQnnHtpV79Skel.so → 'V79'). Highest wins if several ship."""
+    best = None
+    for root in ('/usr/lib/dsp', '/usr/lib/rfsa', '/opt/qnn-libs', '/opt/qnn'):
+        for p in glob.glob(os.path.join(root, '**', 'libQnnHtp*Skel.so'), recursive=True):
+            m = re.search(r'HtpV(\d+)', os.path.basename(p))
+            if m and (best is None or int(m.group(1)) > best):
+                best = int(m.group(1))
+    return f'V{best}' if best else None
+
+def _detect_gpu():
+    """Adreno model, preferring the kgsl model node, falling back to the GPU's
+    device-tree compatible (e.g. 'qcom,adreno-623.0' → 'Adreno 623')."""
+    v = _read_first('/sys/class/kgsl/kgsl-3d0/gpu_model')
+    if v:
+        m = re.match(r'(?i)adreno[_\s-]*(\w+)', v)
+        return f'Adreno {m.group(1)}' if m else v
+    for node in glob.glob('/proc/device-tree/soc*/gpu*/compatible') + glob.glob('/proc/device-tree/gpu*/compatible'):
+        for entry in (_read_first(node) or '').replace('\x00', ' ').split():
+            m = re.match(r'qcom,adreno-(\d+)', entry)
+            if m:
+                return f'Adreno {m.group(1)}'
+    return None
+
+def _detect_mesa():
+    """Mesa version from the installed gallium library name, if present."""
+    for pat in ('/usr/lib/libgallium-*.so', '/usr/lib/*/libgallium-*.so'):
+        for p in glob.glob(pat):
+            m = re.search(r'libgallium-([\d.]+)\.so', os.path.basename(p))
+            if m: return m.group(1).rstrip('.')
+    return None
+
+def _detect_distro():
+    try:
+        for line in open('/etc/os-release'):
+            if line.startswith('PRETTY_NAME='):
+                return line.split('=', 1)[1].strip().strip('"') or None
+    except OSError:
+        pass
+    return None
+
+def detect_hardware():
+    """One-shot platform survey. Every value may be None when its source is
+    missing — consumers must degrade gracefully, never assume a board."""
+    un = os.uname()
+    mem_kb = None
+    try:
+        for line in open('/proc/meminfo'):
+            if line.startswith('MemTotal:'):
+                mem_kb = int(line.split()[1]); break
+    except (OSError, ValueError):
+        pass
+    soc = _read_first('/sys/devices/soc0/machine')
+    compat = _dt_compatible()
+    if not soc:
+        for c in compat:
+            if c.startswith('qcom,'):
+                soc = c.split(',', 1)[1].upper(); break
+    return {
+        'soc': soc,                                            # e.g. 'QCS8275'
+        'soc_family': _read_first('/sys/devices/soc0/family'),
+        'soc_id': _read_first('/sys/devices/soc0/soc_id'),
+        'board': _read_first('/proc/device-tree/model'),       # e.g. 'Arduino VENTUNO Q'
+        'compatible': compat,
+        'hexagon': _detect_hexagon_version(),                  # e.g. 'V75'
+        'npu_node': next((n for n in ('/dev/fastrpc-cdsp', '/dev/fastrpc-adsp')
+                          if os.path.exists(n)), next(iter(sorted(glob.glob('/dev/fastrpc-*'))), None)),
+        'gpu': _detect_gpu(),                                  # e.g. 'Adreno 623'
+        'mesa': _detect_mesa(),
+        'distro': _detect_distro(),
+        'kernel': un.release,
+        'arch': un.machine,
+        'cpu_cores': os.cpu_count(),
+        'mem_gb': round(mem_kb / 1024 / 1024, 1) if mem_kb else None,
+        'hostname': un.nodename,
+    }
+
+HW = detect_hardware()
+
+def hw_summary():
+    """Short human label, e.g. 'Arduino VENTUNO Q · QCS8275 · Hexagon V75 NPU'."""
+    parts = []
+    if HW.get('board'): parts.append(HW['board'])
+    if HW.get('soc'): parts.append(HW['soc'])
+    if HW.get('hexagon'): parts.append(f"Hexagon {HW['hexagon']} NPU")
+    if HW.get('gpu'): parts.append(HW['gpu'])
+    return ' · '.join(parts) or 'unknown platform'
+
+def camera_present():
+    """A USB video-class camera is attached (by-id avoids counting ISP nodes)."""
+    return bool(glob.glob('/dev/v4l/by-id/usb-*-video-index0'))
+
+
 def container_running(name):
     r = sh(f"docker ps --filter name=^{name}$ --format '{{{{.Status}}}}'", timeout=5)
     return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
@@ -128,13 +249,47 @@ def container_uptime_s(name):
     except Exception:
         return 0
 
-def start_cam(output):
-    sh("docker rm -f cam-npu cam-npu-hdmi cam-npu-rdp 2>/dev/null")
+
+def cam_device_args():
+    """Map the whole /dev tree plus a cgroup rule for video4linux (char major
+    81) instead of pinning --device nodes: enumeration order shuffles across
+    reboots and a node missing at boot is a failed start that docker restart
+    policies never retry. Apps scan /dev/video* for the camera themselves."""
+    return "-v /dev:/dev " + (f"--group-add {INPUT_GID} " if INPUT_GID else "") + "--device-cgroup-rule='c 81:* rmw' --device-cgroup-rule='c 13:* rmw' "
+
+def htp_cache_dir(aid):
+    """Per-board, per-app dir where the QNN HTP delegate caches the
+    compiled context for the local NPU (Lever A: ship a portable quantized
+    tflite, compile + cache for THIS Hexagon once, restore instantly after).
+    Keyed by Hexagon arch so a different SoC/firmware gets a fresh cache.
+    World-writable since apps run as uid 1000."""
+    hx = HW.get('hexagon') or 'unknown'
+    d = f'/var/lib/dragonwing-htp-cache/{hx}/{aid}'
+    try:
+        os.makedirs(d, exist_ok=True); os.chmod(d, 0o777)
+    except Exception:
+        pass
+    return d
+
+def app_containers(aid):
+    """Every container name an app may run under."""
+    if aid == 'cam-detect':
+        return ['cam-npu', 'cam-npu-hdmi', 'cam-npu-rdp']
+    return [state.get(aid, {}).get('container', aid)]
+
+def build_launch_commands(aid):
+    """The shell commands that (re)create an app's container(s). Single source
+    of truth shared by interactive start and the deployed-at-boot systemd unit."""
+    rm = "docker rm -f " + " ".join(app_containers(aid)) + " 2>/dev/null || true"
+    if aid != 'cam-detect':
+        cont = state[aid].get('container', aid)
+        return [rm, _build_generic_run(aid, cont, state[aid].get('image'))]
+    output = state[aid].get('output', 'hdmi')
     base = (
-        "docker run -d --restart=unless-stopped "
+        "docker run -d --restart=always "
         "--user 1000:1000 --group-add 44 "
-        "--device=/dev/video2:/dev/video2 "
-        "--device=/dev/fastrpc-cdsp:/dev/fastrpc-cdsp "
+        + cam_device_args() +
+        "--device-cgroup-rule='c 10:* rmw' "
         "-v /run/user/1000:/run/user/1000:rw "
         "-v /usr/lib/dsp:/usr/lib/dsp:ro "
         "-v /usr/lib/firmware:/usr/lib/firmware:ro "
@@ -146,15 +301,22 @@ def start_cam(output):
         "-e XDG_RUNTIME_DIR=/run/user/1000 "
         "-e MODEL=/models/yolov8_det.tflite -e CAM_DEVICE=/dev/video2 "
         "-e WIDTH=1280 -e HEIGHT=720 -e HOME=/tmp -e QNN_BACKEND=htp "
-        "-e FULLSCREEN=false "
-        "-e YOCTO_DISTRO='Qualcomm Linux Reference Distro 2.0' "
-        "-e MESA_VERSION=26.0.5 "
-        "-e ADSP_LIBRARY_PATH='/usr/lib/dsp;/usr/lib/dsp/cdsp' "
+        "-e FULLSCREEN=true -e APP_ID=cam-detect "
+        + (f"-e YOCTO_DISTRO='{HW['distro']}' " if HW.get('distro') else "")
+        + (f"-e MESA_VERSION={HW['mesa']} " if HW.get('mesa') else "")
+        + "-e ADSP_LIBRARY_PATH='/usr/lib/dsp;/usr/lib/dsp/cdsp' "
+        + f"-v {htp_cache_dir('cam-detect')}:/htp-cache:rw -e QNN_CACHE_DIR=/htp-cache "
     )
+    cmds = [rm]
     if output in ('hdmi', 'both'):
-        sh(base + "--name cam-npu-hdmi -e WAYLAND_DISPLAY=wayland-1 rubikpi3-cam-test:npu")
+        cmds.append(base + "--name cam-npu-hdmi -e WAYLAND_DISPLAY=wayland-1 rubikpi3-cam-test:npu")
     if output in ('rdp', 'both'):
-        sh(base + "--name cam-npu-rdp -e WAYLAND_DISPLAY=wayland-rdp rubikpi3-cam-test:npu")
+        cmds.append(base + "--name cam-npu-rdp -e WAYLAND_DISPLAY=wayland-rdp rubikpi3-cam-test:npu")
+    return cmds
+
+def start_cam():
+    for cmd in build_launch_commands('cam-detect'):
+        sh(cmd)
 
 def stop_cam():
     sh("docker rm -f cam-npu cam-npu-hdmi cam-npu-rdp 2>/dev/null")
@@ -217,25 +379,25 @@ def _build_generic_run(aid, cont, img):
     ports = [int(p) for p in (state.get(aid, {}).get('ports') or []) if str(p).isdigit() or isinstance(p, int)]
     parts = [
         "docker run -d --name", cont,
-        "--restart=unless-stopped",
+        "--restart=always",
         "--user 1000:1000 --group-add 44",
         "-v /var/lib/dragonwing-feeds:/feeds:rw",
         "-v /sys/class/thermal:/sys/class/thermal:ro",
         "-e", f"APP_ID={aid}",
         "-e HOME=/tmp",
         "-e WIDTH=1280 -e HEIGHT=720",
-        "-e FULLSCREEN=false",
+        "-e FULLSCREEN=true",
     ]
     for p in ports:
         # Publish each declared port to the host. The conflict check above
         # already rejected starts where another running app holds this port.
         parts += [f"-p {p}:{p}"]
     if 'camera' in caps:
-        parts += ["--device=/dev/video2:/dev/video2",
+        parts += [cam_device_args(),
                   "-e CAM_DEVICE=/dev/video2"]
     if 'npu' in caps:
         parts += [
-            "--device=/dev/fastrpc-cdsp:/dev/fastrpc-cdsp",
+            "--device-cgroup-rule='c 10:* rmw'",
             "-v /usr/lib/dsp:/usr/lib/dsp:ro",
             "-v /usr/lib/firmware:/usr/lib/firmware:ro",
             "-v /usr/lib/libcdsprpc.so.1.0.0:/usr/lib/libcdsprpc.so.1.0.0:ro",
@@ -243,6 +405,7 @@ def _build_generic_run(aid, cont, img):
             "-v /usr/lib/libcdsprpc.so:/usr/lib/libcdsprpc.so:ro",
             "-e ADSP_LIBRARY_PATH='/usr/lib/dsp;/usr/lib/dsp/cdsp'",
             "-e QNN_BACKEND=htp",
+            f"-v {htp_cache_dir(aid)}:/htp-cache:rw", "-e QNN_CACHE_DIR=/htp-cache",
             # QNN libs come from the image's /opt/qnn (baked in by rubikpi3-cam-test).
             # For apps without it baked in, we mount from the cam-test image volume:
             "-v /opt/qnn-libs:/opt/qnn:ro",
@@ -252,6 +415,8 @@ def _build_generic_run(aid, cont, img):
             "-v /run/user/1000:/run/user/1000:rw",
             "-e XDG_RUNTIME_DIR=/run/user/1000",
         ]
+        if INPUT_GID:
+            parts += ["-v /dev/input:/dev/input", "--device-cgroup-rule='c 13:* rmw'", f"--group-add {INPUT_GID}"]
         if output == 'rdp':
             parts += ["-e WAYLAND_DISPLAY=wayland-rdp"]
         else:
@@ -273,6 +438,9 @@ def do_start_app(aid, force=False):
     """Centralised start with conflict mediation. Returns dict {ok, conflicts?, message?}."""
     if aid not in state:
         return {"ok": False, "error": f"unknown app {aid!r}"}
+    if 'camera' in (state[aid].get('capabilities') or []) and not camera_present():
+        return {"ok": False, "reason": "no_camera",
+                "message": "Cannot start: this app needs a camera and none is connected. Connect a USB camera and try again."}
     conflicts = detect_conflicts(aid)
     # Reserved system ports cannot be force-preempted — they're held by the
     # marketplace itself or weston-rdp. Surface as an unrecoverable error.
@@ -290,12 +458,91 @@ def do_start_app(aid, force=False):
             stop_app_by_id(c['held_by'])
         time.sleep(0.5)
     if aid == 'cam-detect':
-        start_cam(state[aid].get('output', 'hdmi'))
+        start_cam()
     else:
         cont = state[aid].get('container', aid); img = state[aid].get('image')
         sh(f"docker rm -f {cont} 2>/dev/null")
         sh(_build_generic_run(aid, cont, img))
     return {"ok": True, "id": aid, "preempted": [c['held_by'] for c in conflicts] if conflicts else []}
+
+
+# --- Deploy: boot persistence via systemd ---------------------------------
+# "Deploying" an app installs a systemd unit that (re)creates its container(s)
+# at every boot, independent of marketplace state. The launch commands are
+# written to a script under DEPLOY_DIR so unit files never need shell-quote
+# gymnastics; the unit file's existence is the single source of truth for
+# "deployed". Recall removes both files.
+DEPLOY_DIR = '/var/lib/dragonwing-deploy'
+UNIT_DIR = '/etc/systemd/system'
+
+def _deploy_unit_name(aid):
+    return f'dragonwing-app-{aid}.service'
+
+def app_deployed(aid):
+    return os.path.isfile(os.path.join(UNIT_DIR, _deploy_unit_name(aid)))
+
+def deploy_app(aid):
+    """Write launch script + systemd unit, enable at boot. Raises ValueError."""
+    if aid not in state: raise ValueError(f'unknown app {aid}')
+    # Two deployed apps that both need an exclusive resource (camera, NPU) or
+    # the same port would fight at every boot — refuse upfront.
+    mine_excl  = set(state[aid].get('capabilities') or []) & EXCLUSIVE_CAPS
+    mine_ports = set(int(p) for p in (state[aid].get('ports') or []) if str(p).isdigit() or isinstance(p, int))
+    for oid, o in state.items():
+        if oid == aid or not app_deployed(oid): continue
+        excl  = mine_excl & set(o.get('capabilities') or [])
+        ports = mine_ports & set(int(p) for p in (o.get('ports') or []) if str(p).isdigit() or isinstance(p, int))
+        if excl or ports:
+            res = ', '.join(sorted(excl) + [f'port:{p}' for p in sorted(ports)])
+            raise ValueError(f"already-deployed app {o.get('name', oid)!r} also needs {res}; "
+                             f"recall it first or undeclare the resource")
+    os.makedirs(DEPLOY_DIR, exist_ok=True)
+    script = os.path.join(DEPLOY_DIR, f'{aid}.sh')
+    unit = os.path.join(UNIT_DIR, _deploy_unit_name(aid))
+    body = ('#!/bin/sh\n# Generated by dragonwing-marketplace deploy.\n'
+            '# Do not edit; recall + redeploy instead.\n'
+            + '\n'.join(build_launch_commands(aid)) + '\n')
+    with open(script + '.tmp', 'w') as f: f.write(body)
+    os.chmod(script + '.tmp', 0o755)
+    os.replace(script + '.tmp', script)
+    stop_cmd = 'docker rm -f ' + ' '.join(app_containers(aid))
+    unit_body = f"""[Unit]
+Description=Dragonwing deployed app: {state[aid].get('name', aid)} ({aid})
+Wants=network-online.target
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh {script}
+ExecStop=/bin/sh -c "{stop_cmd}"
+
+[Install]
+WantedBy=multi-user.target
+"""
+    with open(unit + '.tmp', 'w') as f: f.write(unit_body)
+    os.replace(unit + '.tmp', unit)
+    r = sh(f'systemctl daemon-reload && systemctl enable {_deploy_unit_name(aid)}', timeout=15)
+    if r.returncode != 0:
+        # Roll back so app_deployed() doesn't report a half-installed unit.
+        for p in (unit, script):
+            try: os.remove(p)
+            except OSError: pass
+        sh('systemctl daemon-reload', timeout=15)
+        raise ValueError(f'systemctl enable failed: {(r.stderr or r.stdout)[-300:]}')
+    return True
+
+def recall_app(aid):
+    """Disable + remove the boot unit. Running containers are left untouched."""
+    if not app_deployed(aid): raise ValueError('app is not deployed')
+    sh(f'systemctl disable {_deploy_unit_name(aid)} 2>/dev/null', timeout=15)
+    for p in (os.path.join(UNIT_DIR, _deploy_unit_name(aid)),
+              os.path.join(DEPLOY_DIR, f'{aid}.sh')):
+        try: os.remove(p)
+        except OSError: pass
+    sh('systemctl daemon-reload', timeout=15)
+    return True
 
 
 APPS_DIR = '/root/apps'
@@ -456,6 +703,11 @@ def _docker_image_exists(tag):
 def app_view(app_id):
     a = dict(state[app_id])
     a['has_draft'] = app_has_draft(app_id)
+    a['deployed'] = app_deployed(app_id)
+    # Surface why an app can't launch right now so the UI can grey the tile
+    # and explain, instead of letting the user hit a failing start.
+    caps = a.get('capabilities') or []
+    a['blocked'] = 'no_camera' if ('camera' in caps and not camera_present()) else None
     if app_id == 'cam-detect':
         # Legacy multi-container launcher: cam-detect runs as cam-npu-{hdmi,rdp}
         hdmi = container_running('cam-npu-hdmi')
@@ -605,6 +857,36 @@ TOOLS = [
             },
             "required": ["id", "name", "description", "image"]
         }
+    },
+    {
+        "name": "deploy_app",
+        "description": (
+            "Persist an app across reboots. Installs a systemd unit "
+            "(dragonwing-app-<id>.service) that recreates the app's container "
+            "at every boot with the same capability-derived docker flags the "
+            "marketplace uses, so the app keeps running on a headless device "
+            "with no marketplace interaction. Refuses if another deployed app "
+            "holds the same exclusive resource (camera/NPU) or port. Use when "
+            "the user says deploy / 'make it survive reboots' / 'run at boot'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"id": {"type": "string", "description": "App id to deploy."}},
+            "required": ["id"]
+        }
+    },
+    {
+        "name": "recall_app",
+        "description": (
+            "Undo deploy_app: disables and removes the app's boot-time systemd "
+            "unit. The currently-running container (if any) is left untouched — "
+            "use stop_app to stop it now."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"id": {"type": "string", "description": "App id to recall."}},
+            "required": ["id"]
+        }
     }
 
 ]
@@ -672,11 +954,26 @@ def execute_tool(name, inp, sess=None):
     if name == 'uninstall_app':
         aid = inp.get('id')
         if aid not in state: return {"error": f"unknown app {aid!r}"}
+        if app_deployed(aid):
+            try: recall_app(aid)
+            except ValueError: pass
         if aid == 'cam-detect': stop_cam()
         else: sh(f"docker rm -f {state[aid].get('container', aid)} 2>/dev/null")
         with state_lock: state.pop(aid, None)
         save_state()
         return {"ok": True, "uninstalled": aid}
+    if name == 'deploy_app':
+        aid = inp.get('id')
+        if aid not in state: return {"error": f"unknown app {aid!r}"}
+        try: deploy_app(aid)
+        except ValueError as e: return {"error": str(e)}
+        return {"ok": True, "deployed": aid, "unit": _deploy_unit_name(aid)}
+    if name == 'recall_app':
+        aid = inp.get('id')
+        if aid not in state: return {"error": f"unknown app {aid!r}"}
+        try: recall_app(aid)
+        except ValueError as e: return {"error": str(e)}
+        return {"ok": True, "recalled": aid}
     if name == 'start_app':
         return do_start_app(inp.get('id'), force=bool(inp.get('force')))
     if name == 'stop_app':
@@ -693,7 +990,7 @@ def execute_tool(name, inp, sess=None):
         save_state()
         # If running, restart with new target (cam-detect only — generic apps don't have output toggle yet)
         if aid == 'cam-detect' and (container_running('cam-npu-hdmi') or container_running('cam-npu-rdp') or container_running('cam-npu')):
-            stop_cam(); start_cam(out)
+            stop_cam(); start_cam()
         return {"ok": True, "id": aid, "output": out}
     if name == 'list_apps':
         with state_lock: ids = list(state.keys())
@@ -705,7 +1002,10 @@ def execute_tool(name, inp, sess=None):
         # in its own session; os.killpg(pgid, SIGKILL) then kills it and anything
         # it spawned (e.g. docker build runs).
         cmd = inp.get('command', '')
-        to = int(inp.get('timeout', 30))
+        if not (cmd or '').strip():
+            return {"exit_code": -1, "output":
+                    "[error: empty command — pass a shell command string in 'command']"}
+        to = min(int(inp.get('timeout', 180)), 900)
         try:
             proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, start_new_session=True)
@@ -719,7 +1019,10 @@ def execute_tool(name, inp, sess=None):
             try: os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
             except Exception: pass
             stdout, stderr = proc.communicate()
-            stderr = (stderr or b'') + f'\n[timed out after {to}s]'.encode()
+            stderr = (stderr or b'') + (
+                f'\n[timed out after {to}s and was killed. For longer work pass '
+                f'{{"timeout": <seconds>}} (max 900), or start it detached with '
+                f'nohup ... > /tmp/log 2>&1 & and poll the log.]').encode()
         finally:
             if sess is not None and sess.proc is proc: sess.proc = None
             if sess is not None and sess.cancel_flag.is_set():
@@ -754,13 +1057,13 @@ def anthropic_call(api_key, messages, system=None, base_url=None, model=None):
     """Non-streaming Anthropic call. Returns parsed response dict."""
     payload = {
         "model": model or ANTHROPIC_MODEL,
-        "max_tokens": 8000,
+        "max_tokens": 16000,
         "messages": messages,
         "tools": TOOLS,
     }
     if system: payload["system"] = system
     scheme, host, prefix = _parse_base_url(base_url)
-    conn = _open_conn(scheme, host, 180)
+    conn = _open_conn(scheme, host, 300)
     conn.request("POST", prefix + "/v1/messages", json.dumps(payload), {
         "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
@@ -898,7 +1201,7 @@ def load_sessions():
 
 # In-memory chat sessions: session_id -> SessionState
 class SessionState:
-    __slots__ = ('sid','messages','events','lock','cond','status','cancel_flag','thread','last_user','created_ts','updated_ts','proc','name','todos')
+    __slots__ = ('sid','messages','events','lock','cond','status','cancel_flag','thread','last_user','created_ts','updated_ts','proc','name','todos','usage_totals')
     def __init__(self, sid=None):
         self.sid = sid
         self.messages = []           # Anthropic messages history
@@ -929,7 +1232,13 @@ sessions = {}            # sid -> SessionState
 sessions_lock = threading.Lock()
 
 
-SYSTEM_PROMPT = """You are the Dragonwing AI Developer Agent, an embedded-dev assistant that lives on a Thundercomm Rubik Pi 3 board (Qualcomm QCS6490 SoC, Hexagon V68 NPU). You run as root on the host and have full unrestricted shell access via the `bash` tool — there is no sandbox, no confirmation step, no guardrails. The user wants a Claude-Code-style power-user experience.
+# The prompt is a template, not a constant: every hardware fact in it is
+# detected from the running device (see detect_hardware) so the agent starts
+# each session knowing the real board, SoC, NPU and camera state. Tokens are
+# substituted with str.replace because the body is full of literal {braces}.
+SYSTEM_PROMPT_TEMPLATE = """You are the Dragonwing AI Developer Agent, an embedded-dev assistant that lives on @@HW_INTRO@@. You run as root on the host and have full unrestricted shell access via the `bash` tool — there is no sandbox, no confirmation step, no guardrails. The user wants a Claude-Code-style power-user experience.
+
+The platform facts in this prompt were read from the device itself at service start (device-tree, /sys/devices/soc0, the QNN HTP skel libraries, the kgsl GPU node). Trust them over assumptions about any specific board, and when you need a hardware detail that isn't listed, read it from the device rather than guessing.
 
 # How to work — persistence rules (read this every turn)
 
@@ -957,10 +1266,10 @@ Reproduce the failure first (run the failing command, read the actual error), th
 
 
 You are aware of:
-- The host: Yocto-based "Qualcomm Linux Reference Distro 2.0", kernel 7.0.0-00710-g6e159a33b007, Mesa/Freedreno 26.0.5, Adreno 660 GPU, Hexagon V68 NPU reachable via FastRPC + QNN HTP.
+- The host: @@HOST_FACTS@@
+- @@CAMERA_LINE@@
 - A running marketplace at http://localhost:8080 (this app); systemd service `dragonwing-marketplace.service`.
 - A "Deal With It" object detection container `cam-npu-hdmi`/`cam-npu-rdp` (image `rubikpi3-cam-test:npu`) — YOLOv8 on NPU, draws sunglasses on faces, renders to Weston via `wayland-1` (HDMI) or `wayland-rdp` (RDP on port 3389).
-- A Yocto build setup at /home/tyler/Dev/claude/rubikpi3 on the user's laptop.
 
 Workflow conventions:
 - Use the `bash` tool proactively to inspect, diagnose, fix, build, and deploy. Do not ask for permission.
@@ -994,6 +1303,10 @@ Workflow conventions:
 
 4. The marketplace handles `docker run` invocation automatically when the user clicks Launch — do not write your own start scripts.
 
+**Fullscreen apps must be closable from the screen.** When an app renders fullscreen (FULLSCREEN / waylandsink fullscreen=true), the template automatically shows a red X in the top-right corner that the user clicks to stop the app: `closebtn.py` reads the USB mouse directly (the marketplace grants /dev/input access to apps with the `camera` or `display` capability) and calls the marketplace stop API. It is wired into `/root/apps/_template/` (closebtn.py plus a few lines in main.py) and no-ops safely when no mouse is present, so it never crashes the app. KEEP IT: never ship a fullscreen app the user cannot close from the HDMI screen. It comes for free when you start from the template; do not strip closebtn out. Only remove it if the user explicitly asks for a locked kiosk with no on-screen exit.
+
+**Keep apps portable across Dragonwing boards.** Ship the quantized w8a8 `.tflite` in the app, NEVER a SoC-locked QNN context binary (`.bin`). The marketplace mounts a per-board HTP cache and sets `QNN_CACHE_DIR`, and the template loader passes it to the QNN delegate as `cache_dir`, so the model compiles for THIS Hexagon once and restores instantly on later launches. That makes a `.dwapp` shareable to any Dragonwing board and optimized on arrival. When exporting from AI Hub, produce the runtime tflite (w8a8) and let the delegate compile locally; do not bake a device-locked context into the bundle.
+
 Tools you have:
   - bash(command, timeout)            — full root shell. Use freely.
   - set_todos({todos: [{text, status}]}) — maintain a visible plan checklist. Call at the start of any multi-step task with a plan, then update as items move pending → in_progress → completed. Shows the user what you're doing.
@@ -1002,6 +1315,7 @@ Tools you have:
   - uninstall_app({id})               — delete a tile and stop its container.
   - start_app({id}) / stop_app({id}) — equivalent to the user clicking Launch/Stop.
   - set_app_output({id, output})      — switch hdmi|rdp|both for camera apps.
+  - deploy_app({id}) / recall_app({id}) — install/remove a systemd unit (dragonwing-app-<id>.service) that relaunches the app at every boot. Deploy = survives reboots without the marketplace; recall = back to manual launches. Deploy refuses while another deployed app holds the same exclusive capability or port.
 
 Use `set_todos` aggressively. Any task that takes more than 3 hops should start with a plan. Update it as you go — the user is watching the checklist tick.
 
@@ -1020,13 +1334,13 @@ If you ever feel the urge to `systemctl restart dragonwing-marketplace.service`,
 When asked to "remove" or "delete" an app, prefer `uninstall_app` over a `bash`+`curl`. When asked "what's installed" or "is X running", call `list_apps` rather than parsing `docker ps` output.
 
 Capabilities (declare in `install_app({capabilities: [...]})`, applied by the marketplace at `docker run` time):
-  - `camera`     → `--device=/dev/video2`, `CAM_DEVICE` env. Exclusive.
+  - `camera`     → /dev mapped + video4linux cgroup rule (apps scan /dev/video* themselves), `CAM_DEVICE` env hint. Exclusive. Apps with this capability cannot start while no USB camera is attached — the marketplace refuses with reason "no_camera" and the UI greys the tile.
   - `npu`        → FastRPC + QNN bind-mounts, `ADSP_LIBRARY_PATH`, `QNN_BACKEND=htp`, `/opt/qnn`. Exclusive.
   - `display`    → `/run/user/1000` + `WAYLAND_DISPLAY` (wayland-1 for HDMI, wayland-rdp for RDP).
   - `sensors`    → **`--privileged`** + `/sys/class/leds:rw` + `--user 0:0`. Declare this for any app that needs raw I/O: writing LED brightness, reading sysfs sensors, GPIO toggling, /dev/i2c-*, /dev/spidev*, etc. This is the right way to request privileged I/O — do not write your own `--privileged` flag into a Dockerfile or compose; declaring `sensors` in capabilities is the supported path.
 
 Resource contention:
-  - The platform has exclusive resources: the USB camera (/dev/video2) and the NPU (HTP backend).
+  - The platform has exclusive resources: the USB camera and the NPU (HTP backend).
   - Two apps with capability "camera" or "npu" cannot run simultaneously.
   - Host TCP ports: declare them in `install_app({ports: [8501, ...]})` for any app that exposes a web UI / API. The marketplace publishes each port via `docker run -p N:N` automatically, and refuses to launch a second app that overlaps with a port already held by a running one. The conflicts entries look like `{resource: "port:8501", held_by: "<aid>"}`.
   - **Picking a port for a NEW or FORKED app**: never just reuse a tutorial default — call `list_apps` first, collect every `ports[]` value across installed apps, and pick something that doesn't overlap. Also avoid `:8080` (marketplace itself) and `:3389` (weston-rdp); the marketplace flags those as held by `__marketplace__` and the conflict can't be force-preempted. Reasonable ranges to draw from: `8501-8599` for Streamlit/Gradio web UIs, `5000-5099` for Flask/FastAPI backends, `7000-7099` for general HTTP services. Pick the lowest free port in the range so users get predictable URLs.
@@ -1035,6 +1349,39 @@ Resource contention:
   - When the user asks to launch app B while app A holds the resource, prefer asking the user before passing force=true. When it's obvious (e.g., the user said "switch from A to B"), force is fine.
 - Prefer concise, direct responses. Show the user what you did via tool calls; they're visible in the UI.
 """
+
+def build_system_prompt():
+    """Substitute detected hardware facts into the prompt template. Called
+    once per user turn so the camera line reflects live state without
+    invalidating the API prompt cache between hops of the same turn."""
+    hw_intro = []
+    if HW.get('board'): hw_intro.append(f"a {HW['board']} board")
+    soc_bits = [b for b in (
+        f"Qualcomm {HW['soc']} SoC" if HW.get('soc') else None,
+        f"Hexagon {HW['hexagon']} NPU" if HW.get('hexagon') else None,
+        f"{HW['gpu']} GPU" if HW.get('gpu') else None) if b]
+    if soc_bits: hw_intro.append('(' + ', '.join(soc_bits) + ')')
+    intro = ' '.join(hw_intro) or 'a Qualcomm Dragonwing board'
+
+    host = []
+    if HW.get('distro'): host.append(HW['distro'])
+    if HW.get('kernel'): host.append(f"kernel {HW['kernel']}")
+    if HW.get('mesa'): host.append(f"Mesa {HW['mesa']}")
+    if HW.get('gpu'): host.append(f"{HW['gpu']} GPU")
+    host.append(f"Hexagon {HW['hexagon']} NPU reachable via FastRPC + QNN HTP"
+                if HW.get('hexagon') else
+                "no Hexagon NPU detected (QNN HTP skel libraries not found)")
+    if HW.get('cpu_cores'): host.append(f"{HW['cpu_cores']} CPU cores")
+    if HW.get('mem_gb'): host.append(f"{HW['mem_gb']} GB RAM")
+
+    cam = ("A USB camera is currently connected."
+           if camera_present() else
+           "NO USB camera is currently connected — camera apps cannot start until one is plugged in; tiles for them are greyed out in the UI.")
+
+    return (SYSTEM_PROMPT_TEMPLATE
+            .replace('@@HW_INTRO@@', intro)
+            .replace('@@HOST_FACTS@@', ', '.join(host) + '.')
+            .replace('@@CAMERA_LINE@@', cam))
 
 
 # --- Performance metrics collector ---------------------------------------
@@ -1080,17 +1427,24 @@ class Metrics:
         except Exception: pass
         return out
     def _thermals(self):
-        cpu, npu, gpu = [], None, None
+        # Generic across SoCs: classify zones by name family and report the
+        # hottest per class. Known NPU spellings: nspss (QCS6490), nsp-N-N
+        # (QCS8275), npu*, hexagon*, cdsp*. CPU: cpu*/apc*/silver/gold/cluster.
+        cpu, npu, gpu = None, None, None
         for z in os.listdir('/sys/class/thermal'):
             if not z.startswith('thermal_zone'): continue
             try:
-                t = open(f'/sys/class/thermal/{z}/type').read().strip()
+                t = open(f'/sys/class/thermal/{z}/type').read().strip().lower()
                 v = int(open(f'/sys/class/thermal/{z}/temp').read().strip())/1000.0
             except Exception: continue
-            if t.startswith('cpu') and t.endswith('-thermal') and 'ss' not in t: cpu.append(v)
-            elif t.startswith('nspss'): npu = v if npu is None else max(npu, v)
-            elif t.startswith('gpuss'): gpu = v if gpu is None else max(gpu, v)
-        return (max(cpu) if cpu else None), npu, gpu
+            if v <= 0: continue
+            if t.startswith(('nsp', 'npu', 'hexagon', 'cdsp')):
+                npu = v if npu is None else max(npu, v)
+            elif t.startswith('gpu'):
+                gpu = v if gpu is None else max(gpu, v)
+            elif t.startswith(('cpu', 'apc', 'silver', 'gold', 'cluster')):
+                cpu = v if cpu is None else max(cpu, v)
+        return cpu, npu, gpu
     def _devfreq(self, dev):
         try:
             cur = int(open(f'/sys/class/devfreq/{dev}/cur_freq').read().strip())
@@ -1181,6 +1535,9 @@ def run_agent_turn(sid, api_key, user_msg, base_url=None, model=None):
     sess.status = 'running'
     sess.messages.append({"role": "user", "content": user_msg})
     sess.emit('user', {'text': user_msg})
+    # Stable within a turn (keeps the API prompt cache warm across hops),
+    # rebuilt between turns so camera state stays truthful.
+    system_prompt = build_system_prompt()
     try:
         for hop in range(80):  # raised from 40 — complex app builds (docker build + apt + qai-export) routinely chain 50+ tool calls
             if sess.cancel_flag.is_set():
@@ -1193,12 +1550,24 @@ def run_agent_turn(sid, api_key, user_msg, base_url=None, model=None):
             print(f'[chat] sid={sid[:8]} hop={hop} → anthropic ({len(sess.messages)} messages)', flush=True)
             sess.emit('thinking_start', {'hop': hop, 'message_count': len(sess.messages)})
             _t = time.time()
-            resp, status = anthropic_call(api_key, sess.messages, system=SYSTEM_PROMPT, base_url=base_url, model=model)
+            resp, status = anthropic_call(api_key, sess.messages, system=system_prompt, base_url=base_url, model=model)
             sess.emit('thinking_end', {'elapsed_ms': int((time.time()-_t)*1000)})
             if status != 200:
                 print(f'[chat] sid={sid[:8]} anthropic error {status}', flush=True)
                 sess.emit('error', {'status': status, 'detail': resp.get('error', resp)})
                 sess.status = 'error'; return
+            u = resp.get('usage') or {}
+            tot = getattr(sess, 'usage_totals', None) or {
+                'input_tokens': 0, 'output_tokens': 0,
+                'cache_read_input_tokens': 0, 'cache_creation_input_tokens': 0}
+            for k in tot:
+                tot[k] += int(u.get(k) or 0)
+            sess.usage_totals = tot
+            sess.emit('usage', {
+                'last': u, 'totals': tot,
+                'context_tokens': sum(int(u.get(k) or 0) for k in
+                    ('input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens')),
+            })
             assistant_blocks = resp.get('content', [])
             sess.messages.append({"role": "assistant", "content": assistant_blocks})
             tool_results = []
@@ -1230,7 +1599,26 @@ def run_agent_turn(sid, api_key, user_msg, base_url=None, model=None):
                                 "content": json.dumps({"exit_code": -1, "output": "[interrupted before completion]"}),
                             })
                     sess.messages.append({"role": "user", "content": tool_results})
-            if resp.get('stop_reason') == 'tool_use':
+            stop = resp.get('stop_reason')
+            if stop == 'tool_use':
+                continue
+            if stop == 'max_tokens':
+                # Output truncated mid-response (usually a huge tool call,
+                # e.g. writing a whole file in one heredoc). Any tool call in
+                # it was incomplete; tell the model and keep the turn going
+                # so it can redo the work in smaller pieces.
+                note = ("[system note: your previous response hit the max_tokens "
+                        "output limit and was truncated. Any tool call above was "
+                        "incomplete and its result is invalid. Redo that action in "
+                        "smaller steps - write large files in chunks using an "
+                        "initial cat > file <<'EOF' followed by cat >> file <<'EOF' "
+                        "appends of ~100 lines each, then verify with wc -c and "
+                        "py_compile before continuing.]")
+                if has_tool_use and sess.messages and isinstance(sess.messages[-1].get('content'), list):
+                    sess.messages[-1]['content'].append({"type": "text", "text": note})
+                else:
+                    sess.messages.append({"role": "user", "content": note})
+                sess.emit('text', {'text': '\n\n[response hit max_tokens - asking agent to retry in smaller chunks]'})
                 continue
             break
         else:
@@ -1280,6 +1668,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                   'image/svg+xml' if p.endswith('.svg') else
                   'application/octet-stream')
             return self._serve_static(p, ct)
+        if self.path == '/api/system/camera':
+            return self._json(200, {'present': camera_present()})
+        if self.path == '/api/system/info':
+            info = dict(HW)
+            info['camera'] = camera_present()
+            info['summary'] = hw_summary()
+            return self._json(200, info)
+
         if self.path.startswith('/api/feed/'):
             name = self.path.rsplit('/', 1)[-1].split('?', 1)[0]
             if not re.match(r'^[\w-]+\.jpg$', name): return self.send_error(400)
@@ -1369,20 +1765,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except Exception: body = {}
 
         # App control
-        m = re.match(r'^/api/apps/([\w-]+)/(start|stop|output|uninstall|rename|fork|modify|reset|commit|update)$', self.path)
+        m = re.match(r'^/api/apps/([\w-]+)/(start|stop|output|uninstall|rename|fork|modify|reset|commit|update|deploy|recall)$', self.path)
         if m:
             app_id, action = m.group(1), m.group(2)
             if app_id not in state: return self._json(404, {'error': 'unknown app'})
             if action == 'start':
                 force = bool(body.get('force'))
                 r = do_start_app(app_id, force=force)
-                if not r.get('ok') and r.get('conflicts'):
-                    self.send_response(409)
-                    self.send_header('content-type','application/json'); self.end_headers()
-                    self.wfile.write(json.dumps(r).encode()); return
+                if not r.get('ok') and (r.get('conflicts') or r.get('reason')):
+                    return self._json(409, r)
             elif action == 'stop':
                 stop_app_by_id(app_id)
             elif action == 'uninstall':
+                if app_deployed(app_id):
+                    try: recall_app(app_id)
+                    except ValueError: pass
                 stop_app_by_id(app_id)
                 with state_lock: state.pop(app_id, None)
                 save_state()
@@ -1391,7 +1788,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 with state_lock: state[app_id]['output'] = body.get('output', 'hdmi')
                 save_state()
                 if container_running('cam-npu-hdmi') or container_running('cam-npu-rdp') or container_running('cam-npu'):
-                    stop_cam(); start_cam(state[app_id]['output'])
+                    stop_cam(); start_cam()
             elif action == 'rename':
                 new_name = (body.get('name') or '').strip()
                 if not new_name: return self._json(400, {'error': 'name required'})
@@ -1417,6 +1814,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(200, {'ok': True, 'id': app_id, 'app': app_view(app_id)})
             elif action == 'commit':
                 try: commit_app(app_id)
+                except ValueError as e: return self._json(400, {'error': str(e)})
+                return self._json(200, {'ok': True, 'id': app_id, 'app': app_view(app_id)})
+            elif action == 'deploy':
+                try: deploy_app(app_id)
+                except ValueError as e: return self._json(400, {'error': str(e)})
+                return self._json(200, {'ok': True, 'id': app_id, 'app': app_view(app_id)})
+            elif action == 'recall':
+                try: recall_app(app_id)
                 except ValueError as e: return self._json(400, {'error': str(e)})
                 return self._json(200, {'ok': True, 'id': app_id, 'app': app_view(app_id)})
             elif action == 'update':

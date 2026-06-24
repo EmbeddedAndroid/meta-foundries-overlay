@@ -99,3 +99,8 @@ After `docker build -t <id>:latest .`, register via:
       -d '{"id":"<id>","name":"...","description":"...","image":"<id>:latest","cover_image":"/static/..." }'
 
 (Endpoint TBD — the agent's `install_app` tool wraps this.)
+
+
+## Close button (fullscreen)
+
+When `FULLSCREEN=true`, `closebtn.py` draws a red X in the top-right corner and reads the USB mouse (EVIOCGRAB) so the user can click it to stop the app from the HDMI screen. It needs the app to declare the `camera` or `display` capability (the marketplace then grants /dev/input access) and no-ops safely when no mouse is present. Keep it wired in unless you intentionally want a locked, no-exit fullscreen app.
