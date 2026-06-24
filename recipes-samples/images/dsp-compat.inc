@@ -34,3 +34,7 @@ foundries_dsp_compat_symlink () {
     fi
 }
 ROOTFS_POSTPROCESS_COMMAND += "foundries_dsp_compat_symlink;"
+
+# udev rule so NPU app containers (uid 1000 + video group) can open the
+# fastrpc cDSP node. See fastrpc-perms recipe.
+IMAGE_INSTALL:append = " fastrpc-perms"

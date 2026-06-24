@@ -1,0 +1,9 @@
+# Hexagon DSP fastrpc device nodes default to root:root 0600. The Dragonwing
+# NPU app containers run as `docker --user 1000:1000 --group-add 44` (video)
+# and must open the cDSP fastrpc node to reach the QNN HTP backend -- without
+# access the QNN delegate fails ("createUnsignedPD ... not supported",
+# "qnn_open failed 0x72") and inference can't use the NPU. Grant the video
+# group rw so the containers can use the DSP without running as root.
+KERNEL=="fastrpc-cdsp", GROUP="video", MODE="0660"
+KERNEL=="fastrpc-adsp", GROUP="video", MODE="0660"
+KERNEL=="fastrpc-cdsp-secure", GROUP="video", MODE="0660"
