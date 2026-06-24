@@ -292,6 +292,11 @@ def build_launch_commands(aid):
         "--device-cgroup-rule='c 10:* rmw' "
         "-v /run/user/1000:/run/user/1000:rw "
         "-v /usr/lib/dsp:/usr/lib/dsp:ro "
+        # cDSP loads the HTP skel from its default search path /usr/lib/rfsa/adsp;
+        # the host ships it (qairt V68 skel + fastrpc_shell_unsigned_3) under
+        # /usr/lib/dsp/cdsp, so mount that there. Without it the skel never loads
+        # ("Failed to load skel", qnn_open 0x8000060e) and inference falls to CPU.
+        "-v /usr/lib/dsp/cdsp:/usr/lib/rfsa/adsp:ro "
         "-v /usr/lib/firmware:/usr/lib/firmware:ro "
         "-v /sys/class/thermal:/sys/class/thermal:ro "
         "-v /var/lib/dragonwing-feeds:/feeds:rw "
@@ -399,6 +404,8 @@ def _build_generic_run(aid, cont, img):
         parts += [
             "--device-cgroup-rule='c 10:* rmw'",
             "-v /usr/lib/dsp:/usr/lib/dsp:ro",
+            # cDSP HTP skel at its default load path (host qairt runtime).
+            "-v /usr/lib/dsp/cdsp:/usr/lib/rfsa/adsp:ro",
             "-v /usr/lib/firmware:/usr/lib/firmware:ro",
             "-v /usr/lib/libcdsprpc.so.1.0.0:/usr/lib/libcdsprpc.so.1.0.0:ro",
             "-v /usr/lib/libcdsprpc.so.1:/usr/lib/libcdsprpc.so.1:ro",
