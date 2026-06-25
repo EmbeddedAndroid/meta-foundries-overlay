@@ -5,7 +5,7 @@ first boot. Bundles the ubuntu:24.04-based Dockerfile, the YOLOv8 + \
 Haar face detection pipeline (detect.py), the dragonwing logo + \
 sunglasses overlay assets, the yolov8_det.tflite model exported for \
 QCS6490 HTP (w8a8) and the COCO label list, plus the aarch64 QNN host \
-libraries extracted from QAIRT 2.36 (libQnnTFLiteDelegate, libQnnHtp*, \
+libraries extracted from QAIRT 2.43 (libQnnTFLiteDelegate, libQnnHtp*, \
 libQnnSystem). The image itself is not baked into the rootfs: the \
 dragonwing-firstboot one-shot runs 'docker build' against this tree on \
 first boot so the marketplace + cam-detect tile come up working without \
@@ -15,7 +15,7 @@ LICENSE = "CLOSED"
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
-QAIRT_VERSION = "2.36.0.250627"
+QAIRT_VERSION = "2.43.0.260128"
 
 SRC_URI = " \
     file://Dockerfile \
@@ -29,8 +29,7 @@ SRC_URI = " \
     https://softwarecenter.qualcomm.com/api/download/software/sdks/Qualcomm_AI_Runtime_Community/All/${QAIRT_VERSION}/v${QAIRT_VERSION}.zip;name=qairt;subdir=qairt \
 "
 
-# Same archive as rubikpi3-npu-runtime; bitbake dedupes by sha256.
-SRC_URI[qairt.sha256sum] = "66e705f31b169702d6cce71aed4c986212c983caa5608bc3f60f24fa81eabc4b"
+SRC_URI[qairt.sha256sum] = "e3fce35419310bf80aa2947442a4b39366d80237c4bd72946b77832f71b75223"
 
 S = "${UNPACKDIR}"
 
