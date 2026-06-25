@@ -1391,6 +1391,35 @@ def build_system_prompt():
             .replace('@@CAMERA_LINE@@', cam))
 
 
+def npu_inference_ms():
+    """Per-frame NPU inference latency (ms) parsed from the running NPU
+    app's telemetry line (e.g. '... 30.0 fps  yolo=5.8ms face=3.1ms  loop='
+    -> 8.9, the sum of model inferences between 'fps' and 'loop='). None
+    when no NPU app is running. The Hexagon NPU exposes no freq/util counter,
+    so model inference latency is the meaningful NPU perf signal."""
+    try:
+        for aid, a in list(state.items()):
+            if 'npu' not in (a.get('capabilities') or []):
+                continue
+            run = next((c for c in app_containers(aid) if container_running(c)), None)
+            if not run:
+                continue
+            r = sh(f"docker logs --tail 15 {run} 2>&1", timeout=4)
+            val = None
+            for line in (r.stdout or '').splitlines():
+                m = re.search(r'fps(.*?)loop=', line)
+                if not m:
+                    continue
+                ms = re.findall(r'=\s*([\d.]+)\s*ms', m.group(1))
+                if ms:
+                    val = round(sum(float(x) for x in ms), 1)
+            if val is not None:
+                return val
+        return None
+    except Exception:
+        return None
+
+
 # --- Performance metrics collector ---------------------------------------
 class Metrics:
     """Samples /sys + /proc. Persistent across requests so we can compute deltas."""
@@ -1523,6 +1552,7 @@ class Metrics:
             'gpu_max_mhz':    round(gpu_max/1e6, 0) if gpu_max else None,
             'gpu_pct':        round(100*gpu_cur/gpu_max, 1) if gpu_cur and gpu_max else None,
             'cpu_c': cpu_c, 'npu_c': npu_c, 'gpu_c': gpu_c,
+            'npu_ms': npu_inference_ms(),
             'cdsp_state': self._rproc_state('remoteproc1'),
             'adsp_state': self._rproc_state('remoteproc0'),
             'load_1m':  load_1m, 'load_5m':  load_5m, 'load_15m': load_15m, 'tasks': tasks,
