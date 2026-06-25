@@ -25,6 +25,7 @@ SRC_URI = " \
     file://assets/sunglasses.png \
     file://assets/dragonwing-raw.png \
     file://models/yolov8_det.tflite \
+    file://models/face_det_lite.tflite \
     file://models/coco_labels.txt \
     https://softwarecenter.qualcomm.com/api/download/software/sdks/Qualcomm_AI_Runtime_Community/All/${QAIRT_VERSION}/v${QAIRT_VERSION}.zip;name=qairt;subdir=qairt \
 "
@@ -51,6 +52,7 @@ do_install() {
     install -m 0644 ${UNPACKDIR}/assets/dragonwing-raw.png  ${D}${datadir}/dragonwing/cam-test/assets/dragonwing-raw.png
 
     install -m 0644 ${UNPACKDIR}/models/yolov8_det.tflite   ${D}${datadir}/dragonwing/cam-test/models/yolov8_det.tflite
+    install -m 0644 ${UNPACKDIR}/models/face_det_lite.tflite ${D}${datadir}/dragonwing/cam-test/models/face_det_lite.tflite
     install -m 0644 ${UNPACKDIR}/models/coco_labels.txt     ${D}${datadir}/dragonwing/cam-test/models/coco_labels.txt
 
     # Locate QNN aarch64 host libs inside the QAIRT zip. Layout has varied
