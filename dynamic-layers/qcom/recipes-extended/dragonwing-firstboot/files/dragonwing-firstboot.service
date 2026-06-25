@@ -1,10 +1,9 @@
 [Unit]
-Description=Dragonwing first-boot: build rubikpi3-cam-test:npu and seed /opt/qnn-libs
+Description=Dragonwing: (re)build cam-test + kiosk docker images when source changes (OTA-aware)
 After=docker.service network-online.target time-sync.target
 Wants=network-online.target time-sync.target
 Requires=docker.service
 Before=dragonwing-marketplace.service
-ConditionPathExists=!/var/lib/dragonwing-firstboot.done
 
 [Service]
 Type=oneshot

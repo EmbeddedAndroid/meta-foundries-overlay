@@ -1,57 +1,65 @@
 #!/bin/sh
-# Dragonwing first-boot orchestrator. Idempotent; once the .done flag is
-# present systemd skips this unit via ConditionPathExists.
+# Dragonwing boot-time image builder. Runs on EVERY boot (not a one-shot)
+# so that an OTA which ships a new cam-test / kiosk source actually rebuilds
+# the on-device docker images. Each image is stamped with a hash of its
+# read-only /usr source; if the stamp matches, the build is skipped (fast),
+# so normal boots are cheap and only an OTA that changed the source triggers
+# a rebuild.
 #
-# Tasks:
-#   1. Seed /opt/qnn-libs from /root/cam-test/qnn-libs so non-cam-detect
-#      apps that bind-mount -v /opt/qnn-libs:/opt/qnn can resolve the
-#      QNN host libs without the cam-test image being present.
-#   2. Build the rubikpi3-cam-test:npu docker image, which is the FROM
-#      base for the cam-detect tile and for any user fork that chose the
-#      cam-test base. Builds against /root/cam-test/Dockerfile shipped
-#      by rubikpi3-cam-test-src.
-#
-# Both steps require docker (started by docker.service) and network
-# (apt-get for ubuntu:24.04 base layer). Failure of (2) leaves (1)
-# committed and skips the .done flag so systemd retries on next boot.
-set -eu
+# IMPORTANT: builds from the read-only, OTA-fresh /usr/share/dragonwing/*
+# source -- NOT /root/cam-test, which is a copy-if-absent seed that does NOT
+# update on OTA (that was the bug: a QAIRT version bump in the rootfs never
+# reached the docker image, so cam-detect kept loading a mismatched skel).
+set -u
 
 log() { echo "[dragonwing-firstboot] $*"; }
 
-# Step 1: /opt/qnn-libs (always runs; cheap)
-if [ -d /root/cam-test/qnn-libs ] && [ ! -e /opt/qnn-libs/libQnnTFLiteDelegate.so ]; then
-    log "seeding /opt/qnn-libs from /root/cam-test/qnn-libs"
-    mkdir -p /opt/qnn-libs
-    cp -a /root/cam-test/qnn-libs/. /opt/qnn-libs/
-else
-    log "/opt/qnn-libs already populated; skipping"
-fi
+CAM_SRC=/usr/share/dragonwing/cam-test
+KIOSK_SRC=/usr/share/dragonwing/kiosk
 
-# Step 2: docker build rubikpi3-cam-test:npu
-if docker image inspect rubikpi3-cam-test:npu >/dev/null 2>&1; then
-    log "rubikpi3-cam-test:npu already built; skipping"
-else
-    if [ ! -f /root/cam-test/Dockerfile ]; then
-        log "ERROR: /root/cam-test/Dockerfile missing; cannot build"
-        exit 1
+src_stamp() {  # hash the files that determine the image (Dockerfile + QNN runtime)
+    sha256sum "$@" 2>/dev/null | sha256sum | cut -c1-16
+}
+img_stamp() {  # the stamp baked into a previously built image, or empty
+    docker image inspect "$1" --format '{{ index .Config.Labels "dragonwing.src" }}' 2>/dev/null || true
+}
+
+# --- rubikpi3-cam-test:npu (base for the cam-detect tile + forks) ---
+if [ -f "$CAM_SRC/Dockerfile" ]; then
+    want=$(src_stamp "$CAM_SRC/Dockerfile" "$CAM_SRC/qnn-libs/libQnnHtp.so")
+    have=$(img_stamp rubikpi3-cam-test:npu)
+    if [ "$want" != "$have" ]; then
+        log "rebuilding rubikpi3-cam-test:npu (src=$want was=${have:-none})"
+        if docker build --label "dragonwing.src=$want" -t rubikpi3-cam-test:npu "$CAM_SRC"; then
+            # Re-seed /opt/qnn-libs (bind-mounted into non-cam-detect NPU apps)
+            # from the SAME fresh source so the host QNN libs match the image.
+            log "reseeding /opt/qnn-libs from fresh source"
+            rm -rf /opt/qnn-libs.new && mkdir -p /opt/qnn-libs.new \
+                && cp -a "$CAM_SRC/qnn-libs/." /opt/qnn-libs.new/ \
+                && rm -rf /opt/qnn-libs && mv /opt/qnn-libs.new /opt/qnn-libs
+        else
+            log "WARN: rubikpi3-cam-test:npu build failed; will retry next boot"
+        fi
+    else
+        log "rubikpi3-cam-test:npu up to date ($have); skipping"
     fi
-    log "docker build -t rubikpi3-cam-test:npu /root/cam-test"
-    docker build -t rubikpi3-cam-test:npu /root/cam-test
-fi
-
-# Step 3: docker build marketplace-kiosk:latest (HDMI desktop browser).
-# Best-effort -- the desktop branding works without it; a failed/slow build
-# (Chromium via snapshot.debian.org) must not wedge first boot.
-KIOSK_CTX=/usr/share/dragonwing/kiosk
-if docker image inspect marketplace-kiosk:latest >/dev/null 2>&1; then
-    log "marketplace-kiosk:latest already built; skipping"
-elif [ -f "$KIOSK_CTX/Dockerfile" ]; then
-    log "docker build -t marketplace-kiosk:latest $KIOSK_CTX (best-effort)"
-    docker build -t marketplace-kiosk:latest "$KIOSK_CTX" \
-        || log "WARN: marketplace-kiosk build failed; desktop launcher will retry (deliver via registry if persistent)"
 else
-    log "no kiosk build context at $KIOSK_CTX; skipping (dragonwing-weston-desktop not installed?)"
+    log "no cam-test source at $CAM_SRC; skipping"
 fi
 
-touch /var/lib/dragonwing-firstboot.done
+# --- marketplace-kiosk:latest (HDMI desktop browser; best-effort) ---
+if [ -f "$KIOSK_SRC/Dockerfile" ]; then
+    kwant=$(src_stamp "$KIOSK_SRC/Dockerfile" "$KIOSK_SRC/launch.sh")
+    khave=$(img_stamp marketplace-kiosk:latest)
+    if [ "$kwant" != "$khave" ]; then
+        log "rebuilding marketplace-kiosk:latest (best-effort)"
+        docker build --label "dragonwing.src=$kwant" -t marketplace-kiosk:latest "$KIOSK_SRC" \
+            || log "WARN: marketplace-kiosk build failed; will retry next boot"
+    else
+        log "marketplace-kiosk:latest up to date; skipping"
+    fi
+fi
+
+# Keep the legacy flag for anything that watches it; no longer gates this unit.
+mkdir -p /var/lib && touch /var/lib/dragonwing-firstboot.done
 log "done"
