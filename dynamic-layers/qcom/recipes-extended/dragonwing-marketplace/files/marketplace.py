@@ -585,10 +585,20 @@ def export_app_bytes(aid):
         return None if '__pycache__' in ti.name or ti.name.endswith('.pyc') else ti
     with tarfile.open(fileobj=buf, mode='w:gz') as tf:
         tf.add(src, arcname=aid, recursive=True, filter=_no_pycache)
-        data = json.dumps(build_manifest(aid), indent=2).encode()
+        manifest = build_manifest(aid)
+        data = json.dumps(manifest, indent=2).encode()
         info = tarfile.TarInfo(name=f'{aid}/manifest.json')
         info.size = len(data); info.mtime = int(time.time()); info.mode = 0o644
         tf.addfile(info, io.BytesIO(data))
+        # Carry the cover image too. It lives in /static/ (outside the app
+        # dir), so a plain tar of /root/apps/<aid> drops it and the tile shows
+        # broken after importing onto another board. Bundle it under
+        # <aid>/_cover/ so import can restore it to /static/.
+        cover = manifest.get('cover_image') or ''
+        if cover.startswith('/static/'):
+            cp = os.path.join(ROOT, 'static', os.path.basename(cover))
+            if os.path.isfile(cp):
+                tf.add(cp, arcname=f'{aid}/_cover/{os.path.basename(cover)}')
     return buf.getvalue()
 
 def import_app_bytes(body):
@@ -606,6 +616,14 @@ def import_app_bytes(body):
         target = os.path.join(APPS_DIR, aid)
         if os.path.exists(target): shutil.rmtree(target)
         tf.extractall(APPS_DIR)
+    # Restore a bundled cover image to /static/ (see export_app_bytes) so the
+    # tile renders, then drop _cover/ so it isn't baked into the docker image.
+    covdir = os.path.join(target, '_cover')
+    if os.path.isdir(covdir):
+        sdir = os.path.join(ROOT, 'static'); os.makedirs(sdir, exist_ok=True)
+        for f in os.listdir(covdir):
+            shutil.copy2(os.path.join(covdir, f), os.path.join(sdir, f))
+        shutil.rmtree(covdir)
     mpath = os.path.join(target, 'manifest.json')
     manifest = {}
     if os.path.exists(mpath):
