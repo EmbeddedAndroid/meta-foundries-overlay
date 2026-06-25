@@ -24,6 +24,25 @@ img_stamp() {  # the stamp baked into a previously built image, or empty
     docker image inspect "$1" --format '{{ index .Config.Labels "dragonwing.src" }}' 2>/dev/null || true
 }
 
+# --- Refresh /root/marketplace CODE from the OTA-fresh baked copy ---
+# The marketplace service runs /root/marketplace/marketplace.py, but that tree
+# is seeded copy-if-absent (tmpfiles C) so it NEVER updates on OTA. An OTA that
+# ships new marketplace code (e.g. camera detection / cam_device_args, NPU
+# telemetry) would otherwise never reach the running marketplace -- the device
+# keeps executing the stale runtime copy. Refresh the CODE when the baked copy
+# differs; state lives elsewhere (/root/apps + /var/lib/dragonwing-*), so this
+# only touches marketplace.py / html.py / static.
+MP_BAKED=/usr/share/dragonwing/marketplace
+MP_RUN=/root/marketplace
+if [ -d "$MP_RUN" ] && [ -f "$MP_BAKED/marketplace.py" ] \
+   && ! cmp -s "$MP_BAKED/marketplace.py" "$MP_RUN/marketplace.py"; then
+    log "refreshing /root/marketplace code from baked (OTA shipped new marketplace.py)"
+    cp -a "$MP_RUN/marketplace.py" "$MP_RUN/marketplace.py.bak-firstboot" 2>/dev/null || true
+    cp -a "$MP_BAKED/marketplace.py" "$MP_RUN/marketplace.py"
+    [ -f "$MP_BAKED/html.py" ] && cp -a "$MP_BAKED/html.py" "$MP_RUN/html.py"
+    [ -d "$MP_BAKED/static" ] && mkdir -p "$MP_RUN/static" && cp -a "$MP_BAKED/static/." "$MP_RUN/static/"
+fi
+
 # --- rubikpi3-cam-test:npu (base for the cam-detect tile + forks) ---
 if [ -f "$CAM_SRC/Dockerfile" ]; then
     want=$(src_stamp "$CAM_SRC/Dockerfile" "$CAM_SRC/qnn-libs/libQnnHtp.so")
