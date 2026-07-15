@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# Qualcomm IQ-9075 EVK (QCS9075 / sa8775p, "lemans") variant of the agentic
+# factory. Builds lmp-factory-image-iq9075 (qcom-multimedia base) with the
+# same Dragonwing userspace as VENTUNO Q: marketplace, firstboot, apps,
+# qai-export, the V73 cam-test NPU base, the /usr/lib/dsp compat symlink and
+# the Weston kiosk desktop (wallpaper + weston.ini branding).
+#
+# Produces a qcomflash tarball at
+#   tmp/deploy/images/iq-9075-evk/lmp-factory-image-iq9075-*.qcomflash.tar.gz
+#
+# Unlike VENTUNO Q (whose BSP lives on the meta-qcom-3rdparty ventuno-q-next
+# branch), the IQ-9075 EVK machine ships in meta-qcom itself
+# (conf/machine/iq-9075-evk.conf), so the composition is done here directly
+# rather than via a meta-foundries kas/ci/target-*.yml brick:
+#   meta-qcom/ci/iq-9075-evk.yml     -> machine + meta-qcom/ci/base.yml
+#   meta-qcom/ci/qcom-distro-sota.yml -> SOTA-enabled qcom distro
+#   meta-foundries/kas/ci/base.yml    -> meta-foundries + meta-updater
+# (this is exactly what meta-foundries' target-ventuno.yml composes, with the
+# 3rdparty machine brick swapped for meta-qcom's own iq-9075-evk one).
+
+header:
+  version: 14
+  includes:
+    - repo: meta-qcom
+      file: ci/iq-9075-evk.yml
+    - repo: meta-qcom
+      file: ci/qcom-distro-sota.yml
+    - repo: meta-foundries
+      file: kas/ci/base.yml
+
+repos:
+  meta-foundries:
+    url: https://github.com/EmbeddedAndroid/meta-foundries
+    branch: main
+    commit: 78e23d864a5417dc5a4cf4ba7560cb2a4808982c
+
+  meta-foundries-overlay:
+
+  meta-updater:
+    url: https://github.com/EmbeddedAndroid/meta-updater
+    branch: fio-v2
+
+  meta-qcom:
+    url: https://github.com/EmbeddedAndroid/meta-qcom
+    branch: fio-v2
+
+  meta-qcom-distro:
+    url: https://github.com/EmbeddedAndroid/meta-qcom-distro
+    branch: fio-v2
+
+local_conf_header:
+  spdx-off: |
+    INHERIT:remove = "create-spdx"
+    INHERIT_DISTRO:remove = "create-spdx"
+  # Null out meta-qcom ci/base.yml's clo-mirrors key: it rewrites all github
+  # URLs to git.codelinaro.org, which requires auth we do not have. Same
+  # override target-ventuno.yml applies; we compose without that brick, so it
+  # must be repeated here. (Empty string replaces the key -- do NOT set
+  # MIRRORS = "" instead, that would drop the oe-core defaults too.)
+  clo-mirrors: ""
+  bbmask: |
+    # Mask the other image recipes so they do not get parsed for the
+    # iq-9075-evk build (each requires layers/machines not in this kas set).
+    # The per-board cam-test recipes need no mask -- they are
+    # COMPATIBLE_MACHINE-scoped, so they are simply skipped here (and
+    # ventuno-cam-test-src's files/ is still our FILESEXTRAPATHS donor).
+    BBMASK += "recipes-samples/images/lmp-factory-image\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-intel\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-unoq\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-rubikpi3\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-ventuno\.bb$"
+
+target:
+  - lmp-factory-image-iq9075

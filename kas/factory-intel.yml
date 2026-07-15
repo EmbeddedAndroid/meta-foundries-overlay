@@ -34,6 +34,7 @@ local_conf_header:
     BBMASK += "recipes-samples/images/lmp-factory-image-ventuno\.bb$"
     BBMASK += "recipes-samples/images/lmp-factory-image-unoq\.bb$"
     BBMASK += "recipes-samples/images/lmp-factory-image-rubikpi3\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-iq9075\.bb$"
 
   spdx-off: |
     INHERIT:remove = "create-spdx"

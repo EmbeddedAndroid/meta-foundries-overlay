@@ -54,6 +54,7 @@ local_conf_header:
     BBMASK += "recipes-samples/images/lmp-factory-image-ventuno\.bb$"
     BBMASK += "recipes-samples/images/lmp-factory-image-unoq\.bb$"
     BBMASK += "recipes-samples/images/lmp-factory-image-rubikpi3\.bb$"
+    BBMASK += "recipes-samples/images/lmp-factory-image-iq9075\.bb$"
 
   # create-spdx hits a systemd / p11-kit circular dep and a
   # glibc-mtrace tar-on-collateral-recipe failure. Mirror the

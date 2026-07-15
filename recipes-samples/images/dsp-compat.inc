@@ -19,6 +19,11 @@
 
 # qcs8300 / Hexagon V75 (Arduino VENTUNO Q) — verified on hardware.
 DSP_RUNTIME_DIR:ventuno-q = "${datadir}/qcom/qcs8300/Qualcomm/QCS8300-RIDE/dsp"
+# QCS9075 / Hexagon V73 (IQ-9075 EVK). NOTE the SoC dir is sa8775p, not
+# qcs9100/qcs9075 — taken from hexagon-dsp-binaries FILES:*-qcom-iq9075-evk-*
+# ("${datadir}/qcom/sa8775p/Qualcomm/IQ9075-EVK/dsp/{adsp,cdsp*,gdsp*}"), which
+# is what the machine pulls via packagegroup-iq-9075-evk-hexagon-dsp-binaries.
+DSP_RUNTIME_DIR:iq-9075-evk = "${datadir}/qcom/sa8775p/Qualcomm/IQ9075-EVK/dsp"
 # qcm6490 / Hexagon V68 (RB3 Gen 2, RUBIK Pi 3) — from qairt-sdk SoC map;
 # verify on first build of each (ls /usr/share/qcom/.../dsp/cdsp).
 DSP_RUNTIME_DIR:rb3gen2-core-kit = "${datadir}/qcom/qcm6490/Thundercomm/RB3gen2/dsp"
