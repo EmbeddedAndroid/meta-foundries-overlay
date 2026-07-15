@@ -42,5 +42,9 @@ FILES:${PN} = " \
 RDEPENDS:${PN} = "rubikpi3-cam-test-src"
 
 # The cam-test NPU base image differs by Hexagon arch: ventuno-q (QCS8300)
-# uses the V75 variant; rubikpi3 / rb3gen2 (QCS6490, V68) use the default.
+# uses the V75 variant; iq-9075-evk (QCS9075/sa8775p) the V73 one; rubikpi3 /
+# rb3gen2 (QCS6490, V68) use the default. Each variant is COMPATIBLE_MACHINE-
+# scoped, so a machine without an override here fails to parse with
+# "Nothing RPROVIDES 'rubikpi3-cam-test-src'" -- add one per new board.
 RDEPENDS:${PN}:ventuno-q = "ventuno-cam-test-src"
+RDEPENDS:${PN}:iq-9075-evk = "iq9075-cam-test-src"
